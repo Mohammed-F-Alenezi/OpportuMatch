@@ -1,61 +1,25 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  darkMode: ["class"],
-  content: [
-    "./src/pages/**/*.{ts,tsx}",
-    "./src/components/**/*.{ts,tsx}",
-    "./src/app/**/*.{ts,tsx}",
-  ],
+  darkMode: ["class", '[data-theme="dark"]'],
+  content: ["./src/**/*.{ts,tsx}"],
   theme: {
-  	extend: {
-  		borderRadius: {
-  			lg: 'var(--radius)',
-  			md: 'calc(var(--radius) - 2px)',
-  			sm: 'calc(var(--radius) - 4px)'
-  		},
-  		colors: {
-  			background: 'hsl(var(--background))',
-  			foreground: 'hsl(var(--foreground))',
-  			card: {
-  				DEFAULT: 'hsl(var(--card))',
-  				foreground: 'hsl(var(--card-foreground))'
-  			},
-  			popover: {
-  				DEFAULT: 'hsl(var(--popover))',
-  				foreground: 'hsl(var(--popover-foreground))'
-  			},
-  			primary: {
-  				DEFAULT: 'hsl(var(--primary))',
-  				foreground: 'hsl(var(--primary-foreground))'
-  			},
-  			secondary: {
-  				DEFAULT: 'hsl(var(--secondary))',
-  				foreground: 'hsl(var(--secondary-foreground))'
-  			},
-  			muted: {
-  				DEFAULT: 'hsl(var(--muted))',
-  				foreground: 'hsl(var(--muted-foreground))'
-  			},
-  			accent: {
-  				DEFAULT: 'hsl(var(--accent))',
-  				foreground: 'hsl(var(--accent-foreground))'
-  			},
-  			destructive: {
-  				DEFAULT: 'hsl(var(--destructive))',
-  				foreground: 'hsl(var(--destructive-foreground))'
-  			},
-  			border: 'hsl(var(--border))',
-  			input: 'hsl(var(--input))',
-  			ring: 'hsl(var(--ring))',
-  			chart: {
-  				'1': 'hsl(var(--chart-1))',
-  				'2': 'hsl(var(--chart-2))',
-  				'3': 'hsl(var(--chart-3))',
-  				'4': 'hsl(var(--chart-4))',
-  				'5': 'hsl(var(--chart-5))'
-  			}
-  		}
-  	}
+    extend: {
+      colors: {
+        brand: {
+          DEFAULT: "#1B8354",
+          alt: "#145E3D",
+        },
+        // Neutrals + surfaces
+        dark: { bg: "#111927", surface: "#1F2A37", alt: "#0D3D27" },
+        light: { bg: "#ECF3F6", surface: "#FFFFFF", alt: "#F3F7FA" },
+        success: "#C1E4C1",
+        border: { dark: "#263241", light: "#D1D5DB" },
+        text: { dark: "#E5E7EB", light: "#0F172A" },
+        subtext: { dark: "#9CA3AF", light: "#475569" },
+      },
+      borderRadius: { xl: "1rem", "2xl": "1.25rem", "3xl": "1.75rem" },
+      boxShadow: { soft: "0 6px 24px -8px rgba(0,0,0,.25)" },
+    },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [],
 };
