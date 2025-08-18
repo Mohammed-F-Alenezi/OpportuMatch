@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
-import InitiativeCard from "@/components/InitiativeCard";
-import InitiativeModal from "@/components/InitiativeModal";
+import InitiativeCard from "@/components/ui/InitiativeCard";
+import InitiativeModal from "@/components/ui/InitiativeModal";
 import { INITIATIVES } from "@/lib/initiatives";
 
 export default function Page() {

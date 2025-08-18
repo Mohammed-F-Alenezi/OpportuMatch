@@ -1,16 +1,72 @@
-export type Initiative = { id: string; title: string; type: string; agency: string; open: boolean };
+
+export type Initiative = {
+  id: string;
+  slug: string;
+  title: string;
+  type: string;
+  agency: string;
+  open: boolean;
+  description?: string;
+  rule_score?: number;
+  content_score?: number;
+  goal_alignment?: number;
+  final_score?: number;
+  applyUrl?: string;
+};
+
 export const INITIATIVES: Initiative[] = [
-  { id: "001", title: "مسابقة رواد أعمال الجامعات", type: "مسابقة", agency: "منشآت", open: true },
-  { id: "002", title: "معسكرات ريادة الأعمال الجامعية", type: "معسكر", agency: "منشآت", open: true },
-  { id: "003", title: "مبادرة تعزيز مشاركة المنشآت في توصيل الأدوية", type: "مبادرة", agency: "الهيئة العامة", open: false },
-  { id: "004", title: "مبادرة دعم استثمار المرافق التعليمية", type: "مبادرة", agency: "وزارة التعليم", open: true },
-  { id: "005", title: "مبادرة دعم الصيدليات الصغيرة والمتوسطة", type: "مبادرة", agency: "الغذاء والدواء", open: true },
-  { id: "006", title: "برنامج مسرعات أعمال المشاريع الناشئة الجامعية", type: "برنامج", agency: "جامعات", open: true },
-  { id: "007", title: "برنامج مسرعات الأعمال", type: "برنامج", agency: "منشآت", open: false },
-  { id: "008", title: "تمكين أندية ريادة الأعمال الجامعية", type: "تمكين", agency: "جامعات", open: true },
-  { id: "009", title: "برنامج تحفيز رائدات الأعمال", type: "برنامج", agency: "منشآت", open: true },
-  { id: "010", title: "طموح – خدمات المنشآت متسارعة النمو", type: "برنامج", agency: "منشآت", open: true },
-  { id: "011", title: "بوابة منظومة الابتكار التجاري – فكرة", type: "بوابة", agency: "وزارة التجارة", open: true },
-  { id: "012", title: "برنامج الشركات الناشئة الجامعية", type: "برنامج", agency: "جامعات", open: true },
-  { id: "013", title: "برامج وخدمات التجارة الإلكترونية", type: "برامج", agency: "وزارة التجارة", open: true },
+  {
+    id: "007",
+    slug: "accelerators",
+    title: "برنامج مسرعات الأعمال",
+    type: "برنامج",
+    agency: "منشآت",
+    open: true,
+    description: "تسريع تطوّر ونمو الشركات الناشئة عبر شراكات عامة/خاصة.",
+    rule_score: 82, content_score: 77, goal_alignment: 90, final_score: 84,
+    applyUrl: "#"
+  },
+  {
+    id: "006",
+    slug: "uni-accelerators",
+    title: "مسرعات المشاريع الناشئة الجامعية",
+    type: "برنامج",
+    agency: "جامعات",
+    open: true,
+    description: "دعم مشاريع الطلبة وحديثي التخرج لمدة 3–6 أشهر.",
+    rule_score: 75, content_score: 80, goal_alignment: 86, final_score: 80,
+    applyUrl: "#"
+  },
+  {
+    id: "013",
+    slug: "ecommerce",
+    title: "برامج وخدمات التجارة الإلكترونية",
+    type: "برامج",
+    agency: "وزارة التجارة",
+    open: true,
+    description: "تحويل المنشآت للتجارة الإلكترونية ودعمها.",
+    rule_score: 68, content_score: 72, goal_alignment: 78, final_score: 73,
+    applyUrl: "#"
+  },
+  {
+    id: "009",
+    slug: "women-entrepreneurs",
+    title: "برنامج تحفيز رائدات الأعمال",
+    type: "برنامج",
+    agency: "منشآت",
+    open: true,
+    description: "تمكين رائدات الأعمال عبر برامج تدريب ودعم.",
+    rule_score: 70, content_score: 74, goal_alignment: 82, final_score: 75
+  },
+  {
+    id: "004",
+    slug: "edu-facilities",
+    title: "مبادرة دعم استثمار المرافق التعليمية",
+    type: "مبادرة",
+    agency: "وزارة التعليم",
+    open: true,
+    description: "استثمار المرافق التعليمية في مشاريع ريادية.",
+    rule_score: 66, content_score: 69, goal_alignment: 80, final_score: 71
+  }
 ];
+
