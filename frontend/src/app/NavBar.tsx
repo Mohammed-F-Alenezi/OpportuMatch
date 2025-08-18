@@ -3,7 +3,7 @@ import Link from "next/link";
 import Button from "@/components/ui/button";
 import { useTheme } from "@/lib/theme";
 
-export default function NavBar() {
+export default function Navbar() {
   const { theme, setTheme } = useTheme();
 
   return (
