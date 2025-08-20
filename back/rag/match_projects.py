@@ -25,7 +25,10 @@ vector_store = SupabaseVectorStore(
     query_name="match_documents",
 )
 
-llm = ChatOpenAI(temperature=0)
+llm = ChatOpenAI(
+    temperature=0,
+    model_kwargs={"response_format": {"type": "json_object"}}
+)
 
 
 SYSTEM_TEXT = (
@@ -43,7 +46,7 @@ SYSTEM_TEXT = (
     "- Uncertainty Penalty…\n"
     "- Impact…\n"
     "- Final Score…\n\n"
-  "IMPORTANT:\n"
+    "IMPORTANT:\n"
     "- Do not include <ctx> in the final answer; return JSON only.\n"
     "- NEVER use or infer any application window criterion.\n"
     "- ALWAYS call `retrieve` first to get <ctx>.\n"
@@ -57,7 +60,7 @@ SYSTEM_TEXT = (
     "\"program_id\": \"string\", \"program_title\": \"string\", "
     "\"scores\": {{ \"eligibility_failed\": false, \"rule_score\": 0, \"content_score\": 0, "
     "\"goal_alignment\": 0, \"evidence_strength\": 0, \"uncertainty_penalty\": 0, "
-    "\"impact_potential\": null, \"final_score\": 0, \"confidence\": 0 }}, "
+    "\"impact_potential\": 0, \"final_score\": 0 }}, "
     "\"reasons\": [\".. include [S#] ..\"], \"suggestions\": [\".. include [S#] ..\"] "
     "}} ] }}"
 )
@@ -165,17 +168,24 @@ def save_matches_json(project_id, json_text):
     data = _extract_json(json_text)
     items = data.get("matches", [])
     now = datetime.now(timezone.utc).isoformat()
+
     for m in items:
-        scores = m.get("scores", {}) or {}
-        supabase.table("matches").insert({
-            "project_id": project_id,
-            "program_id": m.get("program_id"),
-            "program_title": m.get("program_title"),
-            "match_score": int(scores.get("final_score", 0)),
-            "reasons": "\n- " + "\n- ".join(m.get("reasons", [])) if m.get("reasons") else None,
-            "suggestions": "\n- " + "\n- ".join(m.get("suggestions", [])) if m.get("suggestions") else None,
-            "created_at": now
-        }).execute()
+        scores = (m.get("scores") or {})
+        payload = {
+            "project_id": int(project_id),                         # int8
+            "program_id": (m.get("program_id") or "")[:512],       # text
+            "program_title": (m.get("program_title") or "")[:512], # text
+            "eligibility_failed": bool(scores.get("eligibility_failed", False)),
+            "rule_score": int(scores.get("rule_score", 0)),
+            "content_score": int(scores.get("content_score", 0)),
+            "goal_alignment": int(scores.get("goal_alignment", 0)),
+            "final_score": int(scores.get("final_score", 0)),
+            "reasons": m.get("reasons") or [],          # jsonb (قائمة سطور/جُمل)
+            "suggestions": m.get("suggestions") or [],  # jsonب
+            "created_at": now                           # إذا عندك DEFAULT الآن() تقدر تشيلها
+        }
+        supabase.table("matches").insert(payload).execute()
+
 
 # === main ===
 def main():

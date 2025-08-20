@@ -19,7 +19,7 @@ embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 loader = DirectoryLoader("back/rag/program_md", glob="*.md", loader_cls=TextLoader)
 documents = loader.load()
 
-text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=600, chunk_overlap=50)
 docs = text_splitter.split_documents(documents)
 
 _ = SupabaseVectorStore.from_documents(
