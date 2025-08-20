@@ -1,0 +1,11 @@
+python-dotenv
+PyYAML
+supabase
+langchain
+langchain-core
+langchain-community
+langchain-openai
+langchain-text-splitters
+openai
+tiktoken
+requests
