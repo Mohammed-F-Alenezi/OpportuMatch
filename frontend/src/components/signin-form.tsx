@@ -51,7 +51,7 @@ export default function SigninForm({
 
 
 
-      router.push("/dashboard")
+      router.push("/projects/select")
     } catch (error: any) {
       alert(error.message)
     } finally {
