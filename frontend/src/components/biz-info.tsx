@@ -62,7 +62,8 @@ export default function ProjectForm({ className }: { className?: string }) {
 
   return (
     <div dir="rtl" className={cn("w-full flex justify-center py-10", className)}>
-      <Card className="w-[700px] border-none">
+        <Card className="w-full max-w-none border-none">
+
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">إضافة مشروع جديد</CardTitle>
           <CardDescription>املأ تفاصيل المشروع</CardDescription>
