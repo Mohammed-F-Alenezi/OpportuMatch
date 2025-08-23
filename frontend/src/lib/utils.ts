@@ -13,3 +13,9 @@ export const colors = {
     highlight: "#C1E4C1",
   },
 };
+import { clsx } from "clsx"
+import { twMerge } from "tailwind-merge"
+
+export function cn(...inputs: (string | undefined | null | false)[]) {
+  return twMerge(clsx(inputs))
+}

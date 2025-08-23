@@ -6,19 +6,50 @@ module.exports = {
     extend: {
       colors: {
         brand: {
-          DEFAULT: "#1B8354",
-          alt: "#145E3D",
+          DEFAULT: "var(--brand)",
+          alt: "var(--brand-alt)",
         },
-        // Neutrals + surfaces
-        dark: { bg: "#111927", surface: "#1F2A37", alt: "#0D3D27" },
-        light: { bg: "#ECF3F6", surface: "#FFFFFF", alt: "#F3F7FA" },
-        success: "#C1E4C1",
-        border: { dark: "#263241", light: "#D1D5DB" },
-        text: { dark: "#E5E7EB", light: "#0F172A" },
-        subtext: { dark: "#9CA3AF", light: "#475569" },
+        dark: {
+          bg: "var(--dark-bg)",
+          surface: "var(--dark-surface)",
+          alt: "var(--dark-alt)",
+        },
+        light: {
+          bg: "var(--light-bg)",
+          surface: "var(--light-surface)",
+          alt: "var(--light-alt)",
+        },
+        success: "var(--success)",
+        border: {
+          dark: "var(--border-dark)",
+          light: "var(--border-light)",
+        },
+        text: {
+          dark: "var(--text-dark)",
+          light: "var(--text-light)",
+        },
+        subtext: {
+          dark: "var(--subtext-dark)",
+          light: "var(--subtext-light)",
+        },
+        /* hook into shadcn defaults */
+        background: "var(--background)",
+        foreground: "var(--foreground)",
+        card: {
+          DEFAULT: "var(--card)",
+          foreground: "var(--card-foreground)",
+        },
+        input: "var(--input)",
+        ring: "var(--ring)",
       },
-      borderRadius: { xl: "1rem", "2xl": "1.25rem", "3xl": "1.75rem" },
-      boxShadow: { soft: "0 6px 24px -8px rgba(0,0,0,.25)" },
+      borderRadius: {
+        xl: "1rem",
+        "2xl": "1.25rem",
+        "3xl": "1.75rem",
+      },
+      boxShadow: {
+        soft: "0 6px 24px -8px rgba(0,0,0,.25)",
+      },
     },
   },
   plugins: [],
