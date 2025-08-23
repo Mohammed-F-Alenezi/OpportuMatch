@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -69,6 +69,20 @@ export default function ProjectPicker({
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
+  // lock body scroll when the left panel is open (prevents page “shake”)
+  useEffect(() => {
+    if (!addOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    const prevPadding = (document.body.style as any).paddingInlineEnd;
+    const scrollbar = window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.overflow = "hidden";
+    if (scrollbar > 0) (document.body.style as any).paddingInlineEnd = `${scrollbar}px`;
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      (document.body.style as any).paddingInlineEnd = prevPadding;
+    };
+  }, [addOpen]);
+
   function startRename(p: Project) {
     setRenamingId(p.id);
     setRenameValue(p.name);
@@ -81,7 +95,6 @@ export default function ProjectPicker({
     setRenamingId(null);
   }
 
-  // حركات ناعمة
   const EASE: number[] = [0.22, 1, 0.36, 1];
 
   const rowBase: React.CSSProperties = {
@@ -326,7 +339,7 @@ export default function ProjectPicker({
                   )}
                 </motion.li>
               ))}
-            </motion.ul>
+            </ul>
           </motion.div>
         </div>
       </div>
