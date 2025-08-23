@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Plus,
@@ -19,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
 import BizInfo from "@/components/biz-info";
 
-// icon map (no emojis)
+// icon map
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   rocket: Rocket,
   shoppingbag: ShoppingBag,
@@ -73,6 +73,20 @@ export default function ProjectPicker({
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
+  // lock body scroll when the left panel is open (prevents page “shake”)
+  useEffect(() => {
+    if (!addOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    const prevPadding = (document.body.style as any).paddingInlineEnd;
+    const scrollbar = window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.overflow = "hidden";
+    if (scrollbar > 0) (document.body.style as any).paddingInlineEnd = `${scrollbar}px`;
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      (document.body.style as any).paddingInlineEnd = prevPadding;
+    };
+  }, [addOpen]);
+
   function startRename(p: Project) {
     setRenamingId(p.id);
     setRenameValue(p.name);
@@ -85,7 +99,7 @@ export default function ProjectPicker({
     setRenamingId(null);
   }
 
-  // silky cubic-bezier (easeOutExpo-ish)
+  // silky cubic-bezier tween
   const EASE: number[] = [0.22, 1, 0.36, 1];
 
   const tileBg =
@@ -101,13 +115,13 @@ export default function ProjectPicker({
     border: "1px solid color-mix(in oklab, var(--border) 65%, transparent)",
     boxShadow: "inset 0 6px 14px rgba(0,0,0,0.03), inset 0 -1px 2px rgba(0,0,0,0.02)",
     color: "var(--foreground)",
-    willChange: "transform, box-shadow, filter",
+    willChange: "transform, box-shadow",
   };
 
   return (
     <div
       dir="rtl"
-      className="min-h-[100svh] grid place-items-center"
+      className="min-h-[100svh] grid place-items-center overflow-x-hidden"
       style={{ background: "var(--background)", color: "var(--foreground)" }}
     >
       <div className="w-full max-w-5xl px-6 py-10">
@@ -118,21 +132,36 @@ export default function ProjectPicker({
           </p>
         </header>
 
-        {/* LTR so first child anchors LEFT */}
-        <div className="relative flex w-full gap-6 items-start" dir="ltr">
-          {/* LEFT PANEL (slides in) */}
-          <AnimatePresence>
-            {addOpen && (
-              <motion.div
-                key="left-panel"
-                initial={{ flexBasis: "0%", opacity: 0, x: -24 }}
-                animate={{ flexBasis: "58%", opacity: 1, x: 0 }}
-                exit={{ flexBasis: "0%", opacity: 0, x: -24 }}
-                transition={{ type: "tween", ease: EASE, duration: 0.55 }}
-                className="overflow-hidden"
-                style={{ minWidth: 0 }}
-              >
+        {/* GRID SPLIT with animated CSS variables (ultra stable) */}
+        <motion.div
+          dir="ltr"
+          className="grid w-full items-start gap-6"
+          style={
+            {
+              gridTemplateColumns: "var(--left) var(--right)",
+              // initial values
+              ["--left" as any]: "0fr",
+              ["--right" as any]: "1fr",
+            } as React.CSSProperties
+          }
+          animate={
+            {
+              ["--left" as any]: addOpen ? "0.58fr" : "0fr",
+              ["--right" as any]: addOpen ? "0.42fr" : "1fr",
+            } as any
+          }
+          transition={{ type: "tween", ease: EASE, duration: 0.55 }}
+        >
+          {/* LEFT column (panel container) */}
+          <div className="overflow-hidden" style={{ minWidth: 0 }}>
+            <AnimatePresence initial={false} mode="wait">
+              {addOpen && (
                 <motion.div
+                  key="panel"
+                  initial={{ x: -24, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  exit={{ x: -24, opacity: 0 }}
+                  transition={{ type: "tween", ease: EASE, duration: 0.45 }}
                   className="rounded-3xl h-full p-0"
                   style={{
                     background: "var(--card)",
@@ -154,38 +183,31 @@ export default function ProjectPicker({
                         <X className="w-5 h-5" />
                       </button>
                     </div>
-                    {/* Form fills panel; scroll if tall */}
                     <div dir="rtl" className="max-h-[70vh] overflow-auto pr-1">
                       <BizInfo className="py-0" />
                     </div>
                   </div>
                 </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+              )}
+            </AnimatePresence>
+          </div>
 
-          {/* RIGHT GRID (shifts & scales smoothly) */}
+          {/* RIGHT column (tiles) */}
           <motion.div
             initial={false}
-            animate={{
-              flexBasis: addOpen ? "42%" : "100%",
-              filter: addOpen ? "brightness(0.98) saturate(0.98)" : "none",
-            }}
-            transition={{ type: "tween", ease: EASE, duration: 0.55 }}
+            animate={{ scale: addOpen ? 0.985 : 1, x: addOpen ? 4 : 0 }}
+            transition={{ type: "tween", ease: EASE, duration: 0.45 }}
             style={{ minWidth: 0 }}
           >
-            <motion.ul
+            <ul
               dir="ltr"
               className={cn(
                 "grid",
                 addOpen ? "grid-cols-2 gap-5" : "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-8"
               )}
               style={addOpen ? { gridAutoRows: "1fr" } : undefined}
-              initial={false}
-              animate={{ opacity: 1, scale: addOpen ? 0.98 : 1, x: addOpen ? 6 : 0 }}
-              transition={{ type: "tween", ease: EASE, duration: 0.45 }}
             >
-              {/* + tile FIRST so it sits LEFT when closed */}
+              {/* + tile first so it’s on the LEFT when closed */}
               {!addOpen && (
                 <li className="group flex flex-col items-center">
                   <motion.button
@@ -195,12 +217,11 @@ export default function ProjectPicker({
                       background: "var(--background)",
                       border: "1px solid color-mix(in oklab, var(--border) 70%, transparent)",
                       boxShadow: "inset 0 8px 18px rgba(0,0,0,0.04)",
-                      willChange: "transform, box-shadow, filter",
+                      willChange: "transform, box-shadow",
                     }}
                     whileHover={{
                       scale: 1.06,
                       y: -2,
-                      filter: "brightness(1.06)",
                       boxShadow:
                         "0 14px 30px rgba(27,131,84,0.20), inset 0 8px 18px rgba(0,0,0,0.03)",
                     }}
@@ -211,7 +232,6 @@ export default function ProjectPicker({
                   >
                     <Plus className="size-12" style={{ color: "var(--brand)" }} />
                   </motion.button>
-                  {/* label grows with hover (via .group) */}
                   <span
                     className="mt-3 text-sm sm:text-base font-medium text-center transition-transform duration-200 ease-out group-hover:scale-110"
                     style={{ color: "var(--foreground)" }}
@@ -237,7 +257,6 @@ export default function ProjectPicker({
                     whileHover={{
                       scale: addOpen ? 0.97 : 1.06,
                       y: -2,
-                      filter: "brightness(1.05)",
                       boxShadow:
                         "0 12px 28px rgba(27,131,84,0.14), inset 0 6px 14px rgba(0,0,0,0.03)",
                     }}
@@ -249,7 +268,6 @@ export default function ProjectPicker({
                     <RenderIcon name={p.icon} />
                   </motion.button>
 
-                  {/* label grows with hover (via .group) */}
                   <div className="mt-3 flex items-center justify-center gap-2">
                     {renamingId === p.id ? (
                       <form
@@ -313,10 +331,11 @@ export default function ProjectPicker({
                   </div>
                 </li>
               ))}
-            </motion.ul>
+            </ul>
           </motion.div>
-        </div>
+        </motion.div>
 
+       
       </div>
     </div>
   );
