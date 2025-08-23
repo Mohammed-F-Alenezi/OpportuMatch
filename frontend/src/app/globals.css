@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* Light by default */
-:root {
+/* :root {
   --bg: #ECF3F6;
   --surface: #FFFFFF;
   --surface2: #F3F7FA;
@@ -13,17 +13,99 @@
   --brand: #1B8354;
   --brandAlt: #145E3D;
   --success: #C1E4C1;
+} */
+:root {
+  /* === Existing tokens (oklch) === */
+  --radius: 0.65rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.141 0.005 285.823);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.141 0.005 285.823);
+  --border: oklch(0.92 0.004 286.32);
+  --input: oklch(0.92 0.004 286.32);
+  --ring: oklch(0.723 0.219 149.579);
+
+  /* === From tailwind.config.js === */
+  --brand: #1B8354;
+  --brand-alt: #145E3D;
+
+  /* neutrals / surfaces */
+  --dark-bg: #111927;
+  --dark-surface: #1F2A37;
+  --dark-alt: #0D3D27;
+  --light-bg: #ECF3F6;
+  --light-surface: #FFFFFF;
+  --light-alt: #F3F7FA;
+
+  /* status / support */
+  --success: #C1E4C1;
+
+  /* borders */
+  --border-dark: #263241;
+  --border-light: #D1D5DB;
+
+  /* text */
+  --text-dark: #E5E7EB;
+  --text-light: #0F172A;
+  --subtext-dark: #9CA3AF;
+  --subtext-light: #475569;
+
+  --popover: var(--card);
+  --popover-foreground: var(--card-foreground);
+
+  --accent: oklch(0.967 0.001 286.375);
+  --accent-foreground: oklch(0.21 0.006 285.885);
+
 }
 
+.dark {
+  /* === Existing tokens (oklch) === */
+  --background: rgba(17, 25, 39, 0.5);
+  --foreground: oklch(0.985 0 0);
+  --card: rgba(31, 42, 55);
+  --card-foreground: oklch(0.985 0 0);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: #1B8354;
+
+  /* === From tailwind.config.js, adjusted to dark === */
+  --brand: #1B8354;
+  --brand-alt: #145E3D;
+
+  --dark-bg: #111927;
+  --dark-surface: #1F2A37;
+  --dark-alt: #0D3D27;
+  --light-bg: #111927;        /* remap light to dark context */
+  --light-surface: #1F2A37;
+  --light-alt: #0D3D27;
+
+  --success: #C1E4C1;
+
+  --border-dark: #263241;
+  --border-light: #263241;
+
+  --text-dark: #E5E7EB;
+  --text-light: #E5E7EB;
+  --subtext-dark: #9CA3AF;
+  --subtext-light: #9CA3AF;
+
+  --popover: var(--card);
+  --popover-foreground: var(--card-foreground);
+
+  --accent: oklch(0.274 0.006 286.033);
+  --accent-foreground: oklch(0.985 0 0);
+}
+
+
 /* Dark */
-[data-theme="dark"] {
+/* [data-theme="dark"] {
   --bg: #111927;
   --surface: #1F2A37;
   --surface2: #0D3D27;
   --text: #E5E7EB;
   --subtext: #9CA3AF;
   --border: #263241;
-}
+} */
 
 /* Utils */
 body { font-feature-settings: "ss01" on; }

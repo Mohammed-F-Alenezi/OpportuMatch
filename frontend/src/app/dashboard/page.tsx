@@ -3,11 +3,29 @@ import { useMemo, useState } from "react";
 import InitiativeCard from "@/components/ui/InitiativeCard";
 import InitiativeModal from "@/components/ui/InitiativeModal";
 import { INITIATIVES } from "@/lib/initiatives";
+import { useEffect } from "react";
 
 export default function Page() {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState<any>(null);
   const filtered = useMemo(()=>INITIATIVES.filter(i=>i.title.includes(query)), [query]);
+  const [projects, setProjects] = useState([])
+
+  useEffect(() => {
+    const token = localStorage.getItem("token")
+    if (!token) {
+      window.location.href = "/login"
+      return
+    }
+
+    fetch("http://127.0.0.1:8000/users/me/projects", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => setProjects(data.projects || []))
+  }, [])
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-8">

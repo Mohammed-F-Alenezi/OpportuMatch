@@ -1,6 +1,6 @@
 "use client";
 import Donut from "./Donut";
-import Button from "../ui/button";
+import {Button} from "../ui/button";
 import { Initiative } from "@/lib/initiatives";
 
 export default function InitiativeModal({ item, onClose, startup }:{
