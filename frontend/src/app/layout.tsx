@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import NavBar from "@/components/ui/NavBar";
 import { ThemeProvider } from "@/components/theme-provider";
 
+
 export const metadata: Metadata = {
   title: "منصّة مزايا للتمويل",
   description: "MVP UI",

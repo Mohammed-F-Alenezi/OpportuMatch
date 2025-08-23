@@ -5,7 +5,13 @@ import { useTheme } from "next-themes";
 import moon from "@/assets/Moon_and_Stars.png";
 import sun from "@/assets/Sun.png";
 import Image from "next/image";
+import localFont from "next/font/local";
 
+const xbShafigh = localFont({
+  src: "../../assets/fonts/XB_ShafighBd.ttf", 
+  variable: "--font-shafigh",
+  display: "swap",
+});
 export default function Navbar() {
   const { theme, setTheme } = useTheme();
 
@@ -20,14 +26,14 @@ export default function Navbar() {
                style={{ background: "color-mix(in oklab, var(--brandAlt) 20%, transparent)", color: "var(--brand)" }}>
             
           </div>
-          <Link href="/" className="text-lg font-semibold">بُوصْلَةُ الْمُمَكِّنَاتِ</Link>
+          <Link href="/" className={`text-[28px] font-semibold ${xbShafigh.className}`}>بُوصْلَةُ الْمُمَكِّنَاتْ</Link>
         </div>
         <div className="mt-2">
           <Button variant="ghost" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
-            {theme === "dark" ? (
-              <Image src={sun} alt="Sun" width={40} height={40} />
-            ) : (
+            {theme === "light" ? (
               <Image src={moon} alt="Moon and stars" width={40} height={40} />
+            ) : (
+              <Image src={sun} alt="Sun" width={40} height={40} />
             )}
           </Button>
         </div>

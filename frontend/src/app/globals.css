@@ -17,44 +17,44 @@
 :root {
   /* === Existing tokens (oklch) === */
   --radius: 0.65rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.141 0.005 285.823);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.141 0.005 285.823);
-  --border: oklch(0.92 0.004 286.32);
-  --input: oklch(0.92 0.004 286.32);
-  --ring: oklch(0.723 0.219 149.579);
+  --background: oklch(0.96 0.004 160);            /* كان 0.985 → أغمق بهدوء */
+  --foreground: oklch(0.20 0.004 240);            /* نص أغمق بشعره */
+  --card: oklch(0.97 0 0);                         /* بدل White شفاف → سطح أغمق وثابت */
+  --card-foreground: var(--foreground);
+  --border: oklch(0 0 0 / 16%);                    /* كان 12% */
+  --input: oklch(0 0 0 / 12%);                     /* كان 8% */
+  --ring: #1B8354;
 
-  /* === From tailwind.config.js === */
+  /* الهوية */
   --brand: #1B8354;
   --brand-alt: #145E3D;
 
-  /* neutrals / surfaces */
+  /* خرائط أسطح للتوافق عبر الثيمين */
   --dark-bg: #111927;
   --dark-surface: #1F2A37;
   --dark-alt: #0D3D27;
-  --light-bg: #ECF3F6;
-  --light-surface: #FFFFFF;
-  --light-alt: #F3F7FA;
+  --light-bg: #EEF3F0;                             /* كان #F6FAF8 */
+  --light-surface: #FAFAFA;                        /* كان #FFFFFF */
+  --light-alt: #E6EFEA;                            /* كان #ECF5F0 */
 
-  /* status / support */
-  --success: #C1E4C1;
+  /* حالات ورسائل */
+  --success: #0F6A43;                              /* أغمق من  #157F51 */
+  --border-dark: #64748B;                          /* slate-500 */
+  --border-light: #D1D5DB;                         /* gray-300 */
 
-  /* borders */
-  --border-dark: #263241;
-  --border-light: #D1D5DB;
+  /* نصوص */
+  --text-dark: #0B1220;                            /* أعمق من slate-900 */
+  --text-light: #111827;                           /* gray-900 */
+  --subtext-dark: #334155;                         /* slate-700 */
+  --subtext-light: #4B5563;                        /* gray-600 */
 
-  /* text */
-  --text-dark: #E5E7EB;
-  --text-light: #0F172A;
-  --subtext-dark: #9CA3AF;
-  --subtext-light: #475569;
-
+  /* Popover */
   --popover: var(--card);
   --popover-foreground: var(--card-foreground);
 
-  --accent: oklch(0.967 0.001 286.375);
-  --accent-foreground: oklch(0.21 0.006 285.885);
+  /* Accent بارد أغمق قليلًا */
+  --accent: oklch(0.88 0.02 286.033);             /* كان 0.92 */
+  --accent-foreground: oklch(0.26 0 0);           /* كان 0.24 */
 
 }
 
