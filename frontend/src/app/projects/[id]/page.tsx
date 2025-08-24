@@ -2,10 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { motion } from "framer-motion";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
-const EASE: number[] = [0.22, 1, 0.36, 1];
+import { motion, AnimatePresence } from "framer-motion";
 
 type Project = {
   id: string;
@@ -14,7 +11,6 @@ type Project = {
   stage?: string | null;
   sectors?: string[] | null;
   funding_need?: number | null;
-  updated_at?: string | null;
 };
 
 type Match = {
@@ -41,11 +37,43 @@ type Match = {
   evidence_program?: any;
 };
 
+const API = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+const EASE: number[] = [0.22, 1, 0.36, 1];
+
+/* ---------- helpers ---------- */
+const clamp = (n: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, n));
+const pct = (x?: number | null) => (x != null ? clamp(Math.round(x * 100)) : null);
+const toLines = (v: any): string[] =>
+  !v ? [] : Array.isArray(v) ? v.map(String).filter(Boolean) : typeof v === "object" ? Object.values(v).map(String).filter(Boolean) : [String(v)];
+
+function pickScore(m: Match) {
+  if (m.score_final_cal != null) return clamp(Math.round(m.score_final_cal * 100));
+  if (m.score_final_raw != null) return clamp(Math.round(m.score_final_raw * 100));
+  const parts = [m.score_rule, m.score_content, m.score_goal].filter((x): x is number => x != null);
+  return parts.length ? clamp(Math.round((parts.reduce((a, b) => a + b, 0) / parts.length) * 100)) : 0;
+}
+
+function sortMatches(ms: Match[]) {
+  const copy = [...ms];
+  copy.sort((a, b) => {
+    const ra = a.rank ?? Number.POSITIVE_INFINITY;
+    const rb = b.rank ?? Number.POSITIVE_INFINITY;
+    if (ra !== rb) return ra - rb; // lower rank = better
+    const sa = a.score_final_cal ?? a.score_final_raw ?? 0;
+    const sb = b.score_final_cal ?? b.score_final_raw ?? 0;
+    return sb - sa; // higher score = better
+  });
+  return copy.slice(0, 5);
+}
+
+/* ---------- page ---------- */
 export default function Page() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+
   const [project, setProject] = useState<Project | null>(null);
   const [matches, setMatches] = useState<Match[]>([]);
+  const [activeIdx, setActiveIdx] = useState(0); // ← use index, not m.id
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
@@ -61,17 +89,18 @@ export default function Page() {
 
         const [pRes, mRes] = await Promise.all([
           fetch(`${API}/projects/${id}`, { headers }),
-          fetch(`${API}/projects/${id}/matches?limit=10`, { headers }),
+          fetch(`${API}/projects/${id}/matches?limit=5`, { headers }),
         ]);
-
         if (!pRes.ok) throw new Error(await pRes.text());
         if (!mRes.ok) throw new Error(await mRes.text());
 
         const pJson = await pRes.json();
         const mJson = await mRes.json();
+        const sorted = sortMatches(mJson.matches ?? []);
 
         setProject(pJson.project);
-        setMatches(mJson.matches ?? []);
+        setMatches(sorted);
+        setActiveIdx(0); // ← default to best (highest ranking)
       } catch (e: any) {
         setErr(e?.message || "Failed to load");
       } finally {
@@ -82,32 +111,24 @@ export default function Page() {
     load();
   }, [id]);
 
-  const headerChips = useMemo(() => {
-    const c: string[] = [];
-    if (project?.stage) c.push(project.stage);
-    if (project?.sectors?.length) c.push(...project.sectors);
-    if (typeof project?.funding_need === "number")
-      c.push(`${project.funding_need.toLocaleString()} ﷼`);
-    return c;
-  }, [project]);
+  const active = matches[activeIdx] || null;
+  const others = useMemo(
+    () => matches.filter((_, i) => i !== activeIdx).slice(0, 4),
+    [matches, activeIdx]
+  );
 
   if (loading) {
     return (
-      <main className="mx-auto max-w-5xl p-8" style={{ color: "var(--foreground)" }}>
+      <main className="mx-auto max-w-7xl px-4 py-8" style={{ color: "var(--foreground)" }}>
         جارِ التحميل…
       </main>
     );
   }
-
   if (err || !project) {
     return (
-      <main className="mx-auto max-w-5xl p-8" style={{ color: "var(--foreground)" }}>
+      <main className="mx-auto max-w-7xl px-4 py-8" style={{ color: "var(--foreground)" }}>
         <p className="mb-4">حدث خطأ: {err || "لم يتم العثور على المشروع"}</p>
-        <button
-          onClick={() => router.push("/projects/select")}
-          className="underline"
-          style={{ color: "var(--brand)" }}
-        >
+        <button onClick={() => router.push("/projects/select")} className="underline" style={{ color: "var(--brand)" }}>
           الرجوع لقائمة المشاريع
         </button>
       </main>
@@ -117,154 +138,246 @@ export default function Page() {
   return (
     <main
       dir="rtl"
-      className="mx-auto max-w-5xl p-6 md:p-8"
-      // ⬇️ Important: do NOT set background here,
-      // so the page blends with the site background from layout.tsx
+      className="mx-auto max-w-7xl px-4 py-6 md:py-8"
       style={{ color: "var(--foreground)" }}
     >
-      {/* Hero / project summary */}
-      <motion.div
-        initial={{ opacity: 0, y: 14, scale: 0.985 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ type: "tween", ease: EASE, duration: 0.5 }}
-        className="relative rounded-3xl p-6 md:p-8 overflow-hidden border mb-6"
-        style={{
-          background: "var(--card)",
-          borderColor: "var(--border)",
-          boxShadow: "0 18px 48px rgba(0,0,0,.12)",
-        }}
-      >
-        {/* toned-down overlay (3%) so it doesn't fight your page bg */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(1100px 460px at 85% -10%, color-mix(in oklab, var(--brand) 3%, transparent), transparent 55%)",
-          }}
-        />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 rounded-3xl"
-          style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,.06)" }}
-        />
+      {/* title on top-right like screenshot */}
+      <div className="mb-4 pr-2 text-lg md:text-xl font-semibold">{project.name}</div>
 
-        <h1 className="relative z-10 text-2xl md:text-3xl font-bold mb-2">{project.name}</h1>
-        <p
-          className="relative z-10 text-sm"
-          style={{ color: "color-mix(in oklab, var(--foreground) 70%, transparent)" }}
-        >
-          {project.description || "بدون وصف"}
-        </p>
-
-        {headerChips.length > 0 && (
-          <div className="relative z-10 mt-3 flex flex-wrap gap-2">
-            {headerChips.map((t, i) => (
-              <span
-                key={i}
-                className="text-xs px-2.5 py-1 rounded-full border"
-                style={{
-                  borderColor: "color-mix(in oklab, var(--border) 70%, transparent)",
-                  background: "color-mix(in oklab, var(--brand) 8%, var(--card))",
-                }}
-              >
-                {t}
-              </span>
-            ))}
+      {/* IMPORTANT: grid itself is forced LTR so columns are: [left column][right column],
+         while content inside each section stays RTL. */}
+      <div dir="ltr" className="grid md:grid-cols-3 gap-6 items-stretch">
+        {/* LEFT: 2×2 stack, vertically centered */}
+        <section className="md:col-span-1 self-stretch">
+          <div className="h-full grid ">
+            <div
+              className="grid gap-12 mt-1"
+              style={{ gridTemplateColumns: "repeat(2,160px)", gridAutoRows: "160px" }}
+            >
+              {others.map((m, i) => (
+                <SmallMatchCard
+                  key={`${m.program_id ?? "p"}-${m.rank}-${m.run_at}-${i}`}
+                  m={m}
+                  onSelect={() => setActiveIdx(matches.indexOf(m))}
+                />
+              ))}
+              {/* keep grid shape if < 4 */}
+              {Array.from({ length: Math.max(0, 4 - others.length) }).map((_, i) => (
+                <div
+                  key={`empty-${i}`}
+                  className="rounded-2xl border"
+                  style={{
+                    width: 160,
+                    height: 160,
+                    background: "color-mix(in oklab, var(--card) 70%, var(--background))",
+                    borderColor: "color-mix(in oklab, var(--border) 70%, transparent)",
+                    opacity: 0.35,
+                  }}
+                />
+              ))}
+            </div>
           </div>
-        )}
-      </motion.div>
+        </section>
 
-      {/* Matches */}
-      <section className="space-y-4">
-        {matches.map((m, i) => (
-          <MatchCard key={`${m.program_id ?? i}-${m.rank}-${m.run_at}`} m={m} index={i} />
-        ))}
-        {matches.length === 0 && (
-          <p className="text-sm" style={{ color: "var(--subtext-light)" }}>
-            لا توجد نتائج مطابقة بعد.
-          </p>
-        )}
-      </section>
+        {/* RIGHT: big green card */}
+        <section className="md:col-span-2">
+          <AnimatePresence mode="wait">
+            {active && (
+              <BigMatchCard
+                key={`${active.program_id ?? "p"}-${active.rank}-${active.run_at}`}
+                m={active}
+                project={project}
+              />
+            )}
+          </AnimatePresence>
+        </section>
+      </div>
     </main>
   );
 }
 
-/* ================== UI bits ================== */
+/* ================== UI ================== */
 
-function MatchCard({ m, index }: { m: Match; index: number }) {
+function SmallMatchCard({ m, onSelect }: { m: Match; onSelect: () => void }) {
   const score = pickScore(m);
-  const reasons = toArrayOfStrings(m.reasons);
-  const improvements = toArrayOfStrings(m.improvements);
-  const evProj = toArrayOfStrings(m.evidence_project);
-  const evProg = toArrayOfStrings(m.evidence_program);
+  return (
+    <motion.button
+      layout
+      onClick={onSelect}
+      initial={{ opacity: 0, y: 8, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      whileHover={{ y: -3, boxShadow: "0 10px 20px rgba(0,0,0,.18)" }}
+      whileTap={{ scale: 0.985 }}
+      transition={{ type: "tween", ease: EASE, duration: 0.22 }}
+      className="rounded-2xl border p-4 text-right overflow-hidden"
+      style={{
+        width: 180,
+        height: 180,
+        background: "color-mix(in oklab, var(--card) 70%, var(--background))",
+        borderColor: "color-mix(in oklab, var(--border) 70%, transparent)",
+      }}
+      title={m.program_name || undefined}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-xs" style={{ color: "var(--subtext-light)" }}>
+          {m.rank != null ? `#${m.rank}` : "—"}
+        </div>
+        <Ring value={score} size={40} stroke={6} />
+      </div>
+      <div className="mt-2 text-[13px] font-medium line-clamp-3">
+        {m.program_name || "برنامج بدون اسم"}
+      </div>
+    </motion.button>
+  );
+}
+
+function BigMatchCard({
+  m,
+  project,
+  onChat,
+}: {
+  m: Match;
+  project: Project;
+  onChat: () => void;
+}) {
+  const score = pickScore(m);
+  const reasons = toLines(m.reasons);
+  const improvements = toLines(m.improvements);
+  const evProj = toLines(m.evidence_project);
+  const evProg = toLines(m.evidence_program);
 
   return (
     <motion.article
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: "tween", ease: EASE, duration: 0.28, delay: index * 0.03 }}
-      className="rounded-2xl border p-4 md:p-5"
+      layout
+      initial={{ opacity: 0, y: 14, scale: 0.985 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 10, scale: 0.985 }}
+      transition={{ type: "tween", ease: EASE, duration: 0.35 }}
+      className="relative rounded-3xl p-6 md:p-8 overflow-hidden border"
       style={{
-        background:
-          "radial-gradient(140% 120% at 0% 100%, color-mix(in oklab, var(--brand-alt) 8%, transparent) 0%, transparent 46%), var(--card)",
+        background: "var(--card)",
         borderColor: "var(--border)",
+        boxShadow: "0 18px 48px rgba(0,0,0,.12)",
       }}
+      dir="rtl"
     >
-      <div className="flex items-center gap-4">
-        <ScoreRing value={score} />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="font-semibold truncate">{m.program_name || "برنامج غير معنون"}</h3>
-            <div className="flex items-center gap-2">
-              {m.rank != null && (
-                <span className="text-xs" style={{ color: "var(--subtext-light)" }}>
-                  الترتيب #{m.rank}
-                </span>
-              )}
-              {m.source_url && (
-                <a
-                  href={m.source_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs underline underline-offset-4"
-                  style={{ color: "var(--brand)" }}
-                >
-                  فتح الرابط
-                </a>
-              )}
+      {/* green tint */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(1200px 520px at 90% -10%, color-mix(in oklab, var(--brand) 10%, transparent), transparent 55%)",
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 rounded-3xl"
+        style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,.06)" }}
+      />
+
+      <div className="relative z-10 flex items-center justify-between gap-4">
+        {/* left: ring + title + chat button */}
+        <div className="flex items-center gap-4">
+          <Ring value={score} size={56} />
+          <div>
+            {/* title + glass chat button */}
+            <div className="flex items-center flex-wrap gap-2">
+              <h3 className="text-xl md:text-2xl font-bold">
+                {m.program_name || "برنامج بدون اسم"}
+              </h3>
+
+              {/* —— دردشه (glassmorphism) —— */}
+              <motion.button
+                type="button"
+                onClick={onChat}
+                className="h-9 px-4 rounded-xl border text-sm"
+                style={{
+                  background: "color-mix(in oklab, var(--foreground) 8%, transparent)",
+                  borderColor: "color-mix(in oklab, var(--border) 70%, transparent)",
+                  backdropFilter: "blur(8px)",
+                  WebkitBackdropFilter: "blur(8px)",
+                  color: "var(--foreground)",
+                }}
+                whileHover={{
+                  boxShadow: "0 10px 24px rgba(27,131,84,.14)",
+                  background: "color-mix(in oklab, var(--brand) 12%, var(--card))",
+                  transition: { type: "tween", ease: EASE, duration: 0.16 },
+                }}
+                whileTap={{ scale: 0.98, transition: { duration: 0.08 } }}
+                aria-label="فتح دردشة المشروع"
+                title="دردشه"
+              >
+                دردشه
+              </motion.button>
+            </div>
+
+            <div
+              className="text-xs mt-0.5"
+              style={{ color: "var(--subtext-light)" }}
+            >
+              الترتيب {m.rank != null ? `#${m.rank}` : "—"} · آخر تشغيل:{" "}
+              {m.run_at ? new Date(m.run_at).toLocaleString("ar-SA") : "—"}
             </div>
           </div>
-          <div className="mt-1 text-xs" style={{ color: "var(--subtext-light)" }}>
-            آخر تشغيل: {m.run_at ? new Date(m.run_at).toLocaleString("ar-SA") : "—"}
-          </div>
         </div>
+
+        {/* right: source link */}
+        {m.source_url && (
+          <a
+            href={m.source_url}
+            target="_blank"
+            rel="noreferrer"
+            className="text-sm underline underline-offset-4 shrink-0"
+            style={{ color: "var(--brand)" }}
+          >
+            فتح رابط البرنامج
+          </a>
+        )}
       </div>
 
-      <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
-        <Meter label="قواعد المطابقة" value={toPct(m.score_rule)} />
-        <Meter label="تشابه المحتوى" value={toPct(m.score_content)} />
-        <Meter label="مواءمة الأهداف" value={toPct(m.score_goal)} />
+      {/* metrics */}
+      <div className="relative z-10 mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <Meter label="قواعد المطابقة" value={pct(m.score_rule)} />
+        <Meter label="تشابه المحتوى" value={pct(m.score_content)} />
+        <Meter label="مواءمة الأهداف" value={pct(m.score_goal)} />
         <Meter
           label="القرب الدلالي"
-          value={m.raw_distance != null ? clamp(100 - Math.round(m.raw_distance * 100)) : null}
-          hint="% أعلى يعني أقرب (من 1 - raw_distance)"
+          value={
+            m.raw_distance != null
+              ? clamp(100 - Math.round(m.raw_distance * 100))
+              : null
+          }
+          hint="% أعلى يعني أقرب (1 - raw_distance)"
         />
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        <SubChip label="قطاع" value={toPct(m.subs_sector)} />
-        <SubChip label="مرحلة" value={toPct(m.subs_stage)} />
-        <SubChip label="تمويل" value={toPct(m.subs_funding)} />
+      {/* chips */}
+      <div className="relative z-10 mt-3 flex flex-wrap gap-2">
+        <Chip label="مرحلة" value={pct(m.subs_stage)} />
+        <Chip label="قطاع" value={pct(m.subs_sector)} />
+        <Chip label="تمويل" value={pct(m.subs_funding)} />
+        {typeof project.funding_need === "number" && (
+          <span
+            className="text-xs px-2.5 py-1 rounded-full border"
+            style={{
+              borderColor: "color-mix(in oklab, var(--border) 70%, transparent)",
+              background: "color-mix(in oklab, var(--brand) 8%, var(--card))",
+            }}
+          >
+            احتياج المشروع · {project.funding_need.toLocaleString()} ﷼
+          </span>
+        )}
       </div>
 
-      <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+      {/* boxes */}
+      <div className="relative z-10 mt-5 grid grid-cols-1 md:grid-cols-2 gap-3">
         <Box title="لماذا هذا مناسب؟" items={reasons} />
         <Box title="كيف تتحسن فرصك؟" items={improvements} neutral />
       </div>
 
       {(evProj.length > 0 || evProg.length > 0) && (
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="relative z-10 mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
           <Box title="شواهد من وصف مشروعك" items={evProj} />
           <Box title="شواهد من وثائق البرنامج" items={evProg} />
         </div>
@@ -273,41 +386,36 @@ function MatchCard({ m, index }: { m: Match; index: number }) {
   );
 }
 
-function pickScore(m: Match) {
-  if (m.score_final_cal != null) return clamp(Math.round(m.score_final_cal * 100));
-  if (m.score_final_raw != null) return clamp(Math.round(m.score_final_raw * 100));
-  const parts = [m.score_rule, m.score_content, m.score_goal].filter(
-    (x): x is number => x != null
-  );
-  return parts.length ? clamp(Math.round((parts.reduce((a, b) => a + b, 0) / parts.length) * 100)) : 0;
-}
-function toPct(x?: number | null) {
-  return x != null ? clamp(Math.round(x * 100)) : null;
-}
-function clamp(n: number, lo = 0, hi = 100) {
-  return Math.max(lo, Math.min(hi, n));
-}
-function toArrayOfStrings(v: any): string[] {
-  if (!v) return [];
-  if (Array.isArray(v)) return v.map(String).filter(Boolean);
-  if (typeof v === "object") return Object.values(v).map(String).filter(Boolean);
-  return [String(v)];
-}
+/* ---------- atoms ---------- */
 
-function ScoreRing({ value }: { value: number }) {
-  const v = clamp(value);
-  const r = 20;
+function Ring({ value, size = 52, stroke = 6 }: { value: number; size?: number; stroke?: number }) {
+  const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
+  const v = clamp(value);
   return (
-    <svg width="52" height="52" viewBox="0 0 52 52" className="shrink-0">
-      <circle cx="26" cy="26" r={r} stroke="color-mix(in oklab, var(--border) 80%, transparent)" strokeWidth="6" fill="none" />
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0">
+      <circle cx={size / 2} cy={size / 2} r={r} stroke="color-mix(in oklab, var(--border) 80%, transparent)" strokeWidth={stroke} fill="none" />
       <motion.circle
-        cx="26" cy="26" r={r} stroke="var(--brand)" strokeWidth="6" fill="none" strokeLinecap="round"
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        stroke="var(--brand)"
+        strokeWidth={stroke}
+        fill="none"
+        strokeLinecap="round"
         initial={{ strokeDasharray: c, strokeDashoffset: c }}
         animate={{ strokeDashoffset: c - (v / 100) * c }}
         transition={{ type: "tween", ease: EASE, duration: 0.8 }}
       />
-      <text x="26" y="30" textAnchor="middle" fontSize="11" fontWeight="600" style={{ fill: "var(--foreground)" }}>
+      <text
+        x="50%"
+        y="52%"
+        dominantBaseline="middle"
+        textAnchor="middle"
+        fontSize={Math.max(10, Math.round(size * 0.22))}
+        fontWeight={600}
+        style={{ fill: "var(--foreground)" }}
+      >
         {v}%
       </text>
     </svg>
@@ -315,7 +423,7 @@ function ScoreRing({ value }: { value: number }) {
 }
 
 function Meter({ label, value, hint }: { label: string; value: number | null; hint?: string }) {
-  const pct = value ?? 0;
+  const pctVal = value ?? 0;
   return (
     <div className="rounded-xl border p-3" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
       <div className="text-xs mb-1" style={{ color: "var(--subtext-light)" }}>
@@ -326,21 +434,17 @@ function Meter({ label, value, hint }: { label: string; value: number | null; hi
           className="h-full"
           style={{ background: "var(--brand)" }}
           initial={{ width: 0 }}
-          animate={{ width: `${pct}%` }}
+          animate={{ width: `${pctVal}%` }}
           transition={{ type: "tween", ease: EASE, duration: 0.6 }}
         />
       </div>
-      <div className="mt-1 text-xs">{value != null ? `${pct}%` : "—"}</div>
-      {hint && (
-        <div className="mt-0.5 text-[11px]" style={{ color: "var(--subtext-light)" }}>
-          {hint}
-        </div>
-      )}
+      <div className="mt-1 text-xs">{value != null ? `${pctVal}%` : "—"}</div>
+      {hint && <div className="mt-0.5 text-[11px]" style={{ color: "var(--subtext-light)" }}>{hint}</div>}
     </div>
   );
 }
 
-function SubChip({ label, value }: { label: string; value: number | null }) {
+function Chip({ label, value }: { label: string; value: number | null }) {
   return (
     <span
       className="text-xs px-2.5 py-1 rounded-full border"
