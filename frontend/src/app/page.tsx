@@ -125,7 +125,7 @@ export default function Page() {
             </Link>
 
             {/* Sign in — outline that tints green on hover (theme-aware fill) */}
-            <Link href="/signin">
+            <Link href="/login">
               <motion.button
                 className="h-12 px-7 text-base rounded-xl border"
                 style={{
