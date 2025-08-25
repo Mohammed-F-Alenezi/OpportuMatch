@@ -12,6 +12,14 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 
+import {
+  Command,
+  CommandInput,
+  CommandGroup,
+  CommandItem,
+  CommandEmpty,
+} from "@/components/ui/command";
+
 const SECTORS = [
   { value: "ecommerce", label: "التجارة الإلكترونية" },
   { value: "logistics",  label: "اللوجستيات" },
@@ -30,13 +38,13 @@ const STAGES = ["فكرة", "MVP", "إطلاق", "تشغيل", "نمو مبكر"
 type Stage = (typeof STAGES)[number];
 const [stage, setStage] = useState<Stage | "">("");
 
-  const [sectors, setSectors] = useState<string[]>([]);
+const SECTORS = ["التجارة الإلكترونية", "اللوجستيات", "الصحة", "التعليم", "الزراعة", "التكنولوجيا", "الخدمات المالية", "السياحة", "الطاقة", "الصناعة"] as const;
+type Sector = (typeof SECTORS)[number];
+
+  const [sectors, setSectors] = useState<Sector[]>([]);
   const [goalsText, setGoalsText] = useState("");
   const [needsFunding, setNeedsFunding] = useState(false);
   const [funding, setFunding] = useState<string>("");
-
-  const toggleSector = (val: string) =>
-    setSectors(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,17 +123,36 @@ const [stage, setStage] = useState<Stage | "">("");
   </Select>
 </div>
 
-        <div className="grid gap-2">
-          <Label>القطاعات</Label>
-          <div className="grid grid-cols-2 gap-2">
-            {SECTORS.map(s => (
-              <label key={s.value} className="flex items-center gap-2">
-                <Checkbox checked={sectors.includes(s.value)} onCheckedChange={() => toggleSector(s.value)} />
-                <span>{s.label}</span>
-              </label>
-            ))}
-          </div>
-        </div>
+<div className="grid gap-2">
+  <Label>القطاعات</Label>
+  <Select
+    onValueChange={(v) => setSectors([v as Sector])}
+    value={sectors[0] ?? ""}
+  >
+    <SelectTrigger>
+      <SelectValue placeholder="اختر القطاع" />
+    </SelectTrigger>
+    <SelectContent>
+      <Command>
+        <CommandInput placeholder="ابحث عن قطاع..." />
+        <CommandEmpty>لا يوجد نتائج</CommandEmpty>
+        <CommandGroup>
+          {SECTORS.map((s) => (
+            <CommandItem
+              key={s}
+              value={s}
+              onSelect={(val) => {
+                setSectors([val as Sector]);
+              }}
+            >
+              {s}
+            </CommandItem>
+          ))}
+        </CommandGroup>
+      </Command>
+    </SelectContent>
+  </Select>
+</div>
 
         <div className="grid gap-2">
           <Label htmlFor="goals">الأهداف (سطر لكل هدف أو مفصولة بفواصل)</Label>
