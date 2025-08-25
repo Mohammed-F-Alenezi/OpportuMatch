@@ -71,18 +71,22 @@ export default function SignupForm({
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="grid gap-6">
-            <div className="grid gap-2">
-              <Label htmlFor="firstName">الاسم الأول</Label>
-              <Input id="firstName" name="firstName" type="text" placeholder="محمد" required />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="middleName">الاسم الأوسط</Label>
-              <Input id="middleName" name="middleName" type="text" placeholder="عبدالله" />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="lastName">اسم العائلة</Label>
-              <Input id="lastName" name="lastName" type="text" placeholder="العامري" required />
-            </div>
+<div className="grid grid-cols-3 gap-4">
+  <div className="grid gap-2">
+    <Label htmlFor="firstName">الاسم الأول</Label>
+    <Input id="firstName" name="firstName" type="text" placeholder="محمد" required />
+  </div>
+
+  <div className="grid gap-2">
+    <Label htmlFor="middleName">الاسم الأوسط</Label>
+    <Input id="middleName" name="middleName" type="text" placeholder="عبدالله" />
+  </div>
+
+  <div className="grid gap-2">
+    <Label htmlFor="lastName">اسم العائلة</Label>
+    <Input id="lastName" name="lastName" type="text" placeholder="العامري" required />
+  </div>
+</div>
             <div className="grid gap-2">
               <Label htmlFor="email">البريد الإلكتروني</Label>
               <Input id="email" name="email" type="email" placeholder="example@email.com" required />
