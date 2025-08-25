@@ -109,3 +109,52 @@
 
 /* Utils */
 body { font-feature-settings: "ss01" on; }
+
+
+
+
+
+
+/* === Orb background animation (cheap, GPU-friendly) === */
+@keyframes orbDriftGlobal {
+  0%   { transform: translate3d(0,0,0) scale(1); opacity: .92; }
+  25%  { transform: translate3d(8px,-10px,0) scale(1.01); opacity: .96; }
+  50%  { transform: translate3d(0,8px,0) scale(1.005); opacity: .93; }
+  75%  { transform: translate3d(-8px,-8px,0) scale(.995); opacity: .95; }
+  100% { transform: translate3d(0,0,0) scale(1); opacity: .92; }
+}
+@keyframes orbWavesGlobal {
+  0%   { transform: translate3d(0,0,0) scale(1); opacity: .40; }
+  50%  { transform: translate3d(10px,-12px,0) scale(1.008); opacity: .45; }
+  100% { transform: translate3d(0,0,0) scale(1); opacity: .40; }
+}
+
+/* shared layers */
+.orb-animated {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+  transform: translateZ(0);
+}
+.orb-layer-1 {
+  background:
+    radial-gradient(circle at 40% 35%, rgba(59,255,155,.25), transparent 35%),
+    radial-gradient(circle at 60% 65%, rgba(0,255,200,.20), transparent 40%),
+    radial-gradient(circle at 50% 50%, rgba(16,255,120,.14), rgba(0,0,0,0) 60%),
+    color-mix(in oklab, var(--brand) 3%, var(--card));
+  animation: orbDriftGlobal 16s ease-in-out infinite;
+  filter: saturate(108%);
+}
+.orb-layer-2 {
+  background:
+    radial-gradient(1200px 600px at 85% -10%, rgba(16,255,120,.10), transparent 55%),
+    radial-gradient(900px 420px at 15% 110%, rgba(0,255,200,.08), transparent 60%);
+  animation: orbWavesGlobal 20s ease-in-out infinite;
+  filter: blur(12px);
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .orb-layer-1, .orb-layer-2 { animation: none !important; }
+}
