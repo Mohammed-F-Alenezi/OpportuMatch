@@ -1,13 +1,23 @@
+// src/components/projects/ProjectPicker.tsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, X } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
 import BizInfo from "@/components/biz-info";
+
+const API = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+
+type ProjectRow = {
+  id: string;
+  name: string;
+  updated_at?: string | null;
+  last_message?: string | null;
+  score?: number | null;
+};
 
 type Project = {
   id: string;
@@ -18,58 +28,96 @@ type Project = {
 };
 
 export default function ProjectPicker({
-  projects,
-  onCreate,
-  onRename,
-  onSelect,
   title = "اختر محادثتك",
 }: {
-  projects?: Project[];
-  onCreate?: (name: string) => Promise<{ id: string; name: string } | void>;
-  onRename?: (id: string, name: string) => Promise<void>;
-  onSelect?: (id: string) => void;
   title?: string;
 }) {
   const router = useRouter();
 
-  const data = useMemo<Project[]>(
-    () =>
-      projects?.length
-        ? projects
-        : [
-            {
-              id: "1",
-              name: "متجري الإلكتروني",
-              lastMessage:
-                "أفضل مطابقة: برنامج التجارة الإلكترونية + مزايا الدفع الرقمي…",
-              updatedAt: new Date().toISOString(),
-              score: 86,
-            },
-            {
-              id: "2",
-              name: "حل لوجستي للأدوية",
-              lastMessage:
-                "تم استرجاع شروط مبادرة توصيل الأدوية ومعايير الجاهزية…",
-              updatedAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-              score: 74,
-            },
-            {
-              id: "3",
-              name: "شركة ناشئة جامعية",
-              lastMessage:
-                "المسرّعة الجامعية مناسبة لمرحلة المشروع + جلسات الإرشاد…",
-              updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(),
-              score: 91,
-            },
-          ],
-    [projects]
-  );
+  const [items, setItems] = useState<Project[] | null>(null);
+  const [loading, setLoading] = useState(false);
 
+  // === جلب المشاريع من الـAPI ===
+  async function loadProjects() {
+    setLoading(true);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const res = await fetch(`${API}/projects/summary`, {
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      });
+      if (!res.ok) {
+        // fallback لو ما عندك summary endpoint بعد
+        const fallback = await fetch(`${API}/users/me/projects`, {
+          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        });
+        const fbJson = await fallback.json();
+        const mapped: Project[] = (fbJson.projects ?? []).map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          updatedAt: p.updated_at,
+          lastMessage: null,
+          score: null,
+        }));
+        setItems(mapped);
+        return;
+      }
+      const data = await res.json();
+      const mapped: Project[] = (data.projects as ProjectRow[]).map((p) => ({
+        id: p.id,
+        name: p.name,
+        updatedAt: p.updated_at ?? null,
+        lastMessage: p.last_message ?? null,
+        score: p.score ?? null,
+      }));
+      setItems(mapped);
+    } catch (e) {
+      console.error(e);
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadProjects();
+  }, []);
+
+  // === إعادة التسمية عبر الـAPI ===
+  async function apiRename(id: string, name: string) {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const res = await fetch(`${API}/projects/${id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    // حدّث الحالة محليًا
+    setItems((prev) =>
+      prev?.map((p) => (p.id === id ? { ...p, name } : p)) ?? prev
+    );
+  }
+
+  // === حالات واجهة موجودة أصلًا ===
   const [addOpen, setAddOpen] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
-  // lock body scroll when the left panel is open (prevents page “shake”)
+  function startRename(p: Project) {
+    setRenamingId(p.id);
+    setRenameValue(p.name);
+  }
+  async function commitRename() {
+    if (!renamingId) return;
+    const name = renameValue.trim();
+    if (!name) return setRenamingId(null);
+    await apiRename(renamingId, name);
+    setRenamingId(null);
+  }
+
+  // قفل سكرول عند فتح اللوحة
   useEffect(() => {
     if (!addOpen) return;
     const prevOverflow = document.body.style.overflow;
@@ -82,18 +130,6 @@ export default function ProjectPicker({
       (document.body.style as any).paddingInlineEnd = prevPadding;
     };
   }, [addOpen]);
-
-  function startRename(p: Project) {
-    setRenamingId(p.id);
-    setRenameValue(p.name);
-  }
-  async function commitRename() {
-    if (!renamingId) return;
-    const name = renameValue.trim();
-    if (!name) return setRenamingId(null);
-    await onRename?.(renamingId, name);
-    setRenamingId(null);
-  }
 
   const EASE: number[] = [0.22, 1, 0.36, 1];
 
@@ -115,7 +151,7 @@ export default function ProjectPicker({
       className="min-h-[100svh]"
       style={{ background: "var(--background)", color: "var(--foreground)" }}
     >
-      <div className="mx-auto w-full max-w-5xl  py-10">
+      <div className="mx-auto w-full max-w-5xl py-10">
         <header className="text-center mb-8">
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">{title}</h1>
           <p className="mt-2 text-sm" style={{ color: "var(--subtext-light)" }}>
@@ -125,38 +161,39 @@ export default function ProjectPicker({
 
         <div className="flex items-start gap-6" dir="ltr">
           {/* اللوحة الجانبية (إضافة) */}
-      <AnimatePresence>
-  {addOpen && (
-    <motion.aside
-      key="add-panel"
-      initial={{ width: 0, opacity: 0, x: -24 }}
-      animate={{ width: "56%", opacity: 1, x: 0 }}
-      exit={{
-        width: 0,
-        opacity: 0,
-        x: -16, // تقليل المسافة في الخروج يحسّن الإحساس
-        // ⬇⬇⬇ عدّل هذه القيم لتسريع الإغلاق
-        transition: {
-          type: "tween",
-          ease: EASE,
-          duration: 0.22,        // ← هذه أهم قيمة لتسريع الإغلاق
-          width:   { duration: 0.24 },
-          x:       { duration: 0.20 },
-          opacity: { duration: 0.16 },
-        },
-        transitionEnd: { display: "none" }, // يمنع أي تقطيع بصري بعد الانتهاء
-      }}
-      // هذا الـ transition العام يُطبّق على الدخول فقط الآن (الخروج فوقه أولى)
-      transition={{ type: "tween", ease: EASE, duration: 0.55 }}
-      className="overflow-hidden rounded-3xl border"
-      style={{ background: "var(--card)", borderColor: "var(--border)" }}
-    >
-
+          <AnimatePresence>
+            {addOpen && (
+              <motion.aside
+                key="add-panel"
+                initial={{ width: 0, opacity: 0, x: -24 }}
+                animate={{ width: "56%", opacity: 1, x: 0 }}
+                exit={{
+                  width: 0,
+                  opacity: 0,
+                  x: -16,
+                  transition: {
+                    type: "tween",
+                    ease: EASE,
+                    duration: 0.22,
+                    width: { duration: 0.24 },
+                    x: { duration: 0.20 },
+                    opacity: { duration: 0.16 },
+                  },
+                  transitionEnd: { display: "none" },
+                }}
+                transition={{ type: "tween", ease: EASE, duration: 0.55 }}
+                className="overflow-hidden rounded-3xl border"
+                style={{ background: "var(--card)", borderColor: "var(--border)" }}
+              >
                 <div className="p-4 sm:p-6 md:p-8">
                   <div className="flex items-center justify-between mb-3" dir="rtl">
                     <h2 className="text-lg sm:text-xl font-semibold">إضافة محادثة جديدة</h2>
                     <button
-                      onClick={() => setAddOpen(false)}
+                      onClick={() => {
+                        setAddOpen(false);
+                        // حمّل القائمة بعد الإضافة (لو عدّلت BizInfo لعمل redirect، ارجع يدويًا)
+                        setTimeout(loadProjects, 350);
+                      }}
                       className="rounded-md p-2 hover:opacity-80"
                       aria-label="إغلاق"
                       title="إغلاق"
@@ -166,6 +203,7 @@ export default function ProjectPicker({
                     </button>
                   </div>
                   <div dir="rtl" className="max-h-[70vh] overflow-auto pr-1">
+                    {/* يفضّل تمرير onSuccess داخل BizInfo لتستدعي loadProjects() */}
                     <BizInfo className="py-0" />
                   </div>
                 </div>
@@ -185,16 +223,11 @@ export default function ProjectPicker({
               className="space-y-4"
               initial="hidden"
               animate="show"
-              variants={{
-                hidden: {},
-                show: { transition: { staggerChildren: 0.06 } },
-              }}
+              variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06 } } }}
             >
               {/* صف بدء محادثة */}
               {!addOpen && (
-                <motion.li
-                  variants={{ hidden: { opacity: 0, y: 6 }, show: { opacity: 1, y: 0 } }}
-                >
+                <motion.li variants={{ hidden: { opacity: 0, y: 6 }, show: { opacity: 1, y: 0 } }}>
                   <motion.button
                     onClick={() => setAddOpen(true)}
                     className="w-full rounded-2xl border p-4 flex items-center gap-4 overflow-hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
@@ -212,10 +245,7 @@ export default function ProjectPicker({
                   >
                     <div
                       className="grid place-content-center size-10 rounded-xl"
-                      style={{
-                        background:
-                          "color-mix(in oklab, var(--brand) 14%, transparent)",
-                      }}
+                      style={{ background: "color-mix(in oklab, var(--brand) 14%, transparent)" }}
                     >
                       <Plus className="size-6" style={{ color: "var(--brand)" }} />
                     </div>
@@ -225,16 +255,10 @@ export default function ProjectPicker({
               )}
 
               {/* صفوف المحادثات */}
-              {data.map((p) => (
-                <motion.li
-                  key={p.id}
-                  layout
-                  variants={{ hidden: { opacity: 0, y: 6 }, show: { opacity: 1, y: 0 } }}
-                >
+              {(items ?? []).map((p) => (
+                <motion.li key={p.id} layout variants={{ hidden: { opacity: 0, y: 6 }, show: { opacity: 1, y: 0 } }}>
                   <motion.button
-                    onClick={() =>
-                      onSelect ? onSelect(p.id) : router.push(`/projects/${p.id}`)
-                    }
+                    onClick={() => router.push(`/projects/${p.id}`)}
                     className="w-full rounded-2xl border p-4 sm:p-5 flex items-center gap-4 sm:gap-5 overflow-hidden text-right focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
                     style={rowBase}
                     whileHover={{
@@ -248,10 +272,8 @@ export default function ProjectPicker({
                     aria-label={p.name}
                     title={p.name}
                   >
-                    {/* حلقة النسبة */}
                     <ScoreRing value={p.score ?? 0} ease={EASE} />
 
-                    {/* محتوى النص (يتمدّد) */}
                     <div className="flex-1 min-w-0" dir="rtl">
                       <div className="flex items-center justify-between gap-3">
                         <h3 className="font-semibold truncate">{p.name}</h3>
@@ -267,18 +289,15 @@ export default function ProjectPicker({
                         )}
                       </div>
 
-                      {/* سطور معاينة */}
                       <div className="mt-2 space-y-1.5">
                         <Line width="76%" />
                         <Line width="58%" dim />
                       </div>
 
-                      {/* آخر رسالة */}
                       <div
                         className="mt-2 rounded-md px-2 py-1.5 text-[12px] sm:text-[13px] truncate"
                         style={{
-                          background:
-                            "color-mix(in oklab, var(--foreground) 10%, transparent)",
+                          background: "color-mix(in oklab, var(--foreground) 10%, transparent)",
                           color: "var(--foreground)",
                         }}
                         title={p.lastMessage || ""}
@@ -287,24 +306,17 @@ export default function ProjectPicker({
                       </div>
                     </div>
 
-                    {/* إعادة تسمية (اختياري) */}
-                    {onRename && (
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          startRename(p);
-                        }}
-                        className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity shrink-0"
-                        style={{ color: "var(--subtext-light)" }}
-                        aria-label="إعادة تسمية"
-                        title="إعادة تسمية"
-                      >
-                        <Pencil className="size-4" />
-                      </button>
-                    )}
+                    <button
+                      onClick={(e) => { e.preventDefault(); startRename(p); }}
+                      className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity shrink-0"
+                      style={{ color: "var(--subtext-light)" }}
+                      aria-label="إعادة تسمية"
+                      title="إعادة تسمية"
+                    >
+                      <Pencil className="size-4" />
+                    </button>
                   </motion.button>
 
-                  {/* نموذج إعادة التسمية تحت الصف */}
                   {renamingId === p.id && (
                     <div className="mt-2 flex items-center justify-start gap-2" dir="rtl">
                       <Input
@@ -312,34 +324,23 @@ export default function ProjectPicker({
                         value={renameValue}
                         onChange={(e) => setRenameValue(e.target.value)}
                         className="h-9 w-60 text-center"
-                        style={{
-                          background: "var(--card)",
-                          color: "var(--foreground)",
-                          borderColor: "var(--border)",
-                        }}
+                        style={{ background: "var(--card)", color: "var(--foreground)", borderColor: "var(--border)" }}
                       />
-                      <Button
-                        size="sm"
-                        onClick={() => void commitRename()}
-                        className="h-9"
-                        style={{ background: "var(--brand)", color: "#fff" }}
-                      >
+                      <Button size="sm" onClick={() => void commitRename()} className="h-9" style={{ background: "var(--brand)", color: "#fff" }}>
                         حفظ
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-9"
-                        onClick={() => setRenamingId(null)}
-                        style={{ color: "var(--subtext-light)" }}
-                      >
+                      <Button size="sm" variant="ghost" className="h-9" onClick={() => setRenamingId(null)} style={{ color: "var(--subtext-light)" }}>
                         إلغاء
                       </Button>
                     </div>
                   )}
                 </motion.li>
               ))}
-            </ul>
+
+              {items && items.length === 0 && !loading && (
+                <li className="text-sm" style={{ color: "var(--subtext-light)" }}>لا توجد مشاريع بعد.</li>
+              )}
+            </motion.ul>
           </motion.div>
         </div>
       </div>
@@ -347,9 +348,9 @@ export default function ProjectPicker({
   );
 }
 
-/* ===== مكوّنات مساعدة ===== */
-
-function timeAgo(iso: string) {
+/* ===== Utilities ===== */
+function timeAgo(iso?: string | null) {
+  if (!iso) return "";
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.round(diff / 60000);
   if (m < 1) return "الآن";
@@ -377,40 +378,20 @@ function Line({ width = "70%", dim = false }: { width?: string; dim?: boolean })
 }
 
 function ScoreRing({ value, ease }: { value: number; ease: number[] }) {
-  const pct = Math.max(0, Math.min(100, value ?? 0));
+  const pct = Math.max(0, Math.min(100, Math.round(value ?? 0)));
   const r = 20;
   const c = 2 * Math.PI * r;
   return (
     <div className="shrink-0">
       <svg width="52" height="52" viewBox="0 0 52 52">
-        <circle
-          cx="26"
-          cy="26"
-          r={r}
-          stroke="color-mix(in oklab, var(--border) 80%, transparent)"
-          strokeWidth="6"
-          fill="none"
-        />
+        <circle cx="26" cy="26" r={r} stroke="color-mix(in oklab, var(--border) 80%, transparent)" strokeWidth="6" fill="none" />
         <motion.circle
-          cx="26"
-          cy="26"
-          r={r}
-          stroke="var(--brand)"
-          strokeWidth="6"
-          fill="none"
-          strokeLinecap="round"
+          cx="26" cy="26" r={r} stroke="var(--brand)" strokeWidth="6" fill="none" strokeLinecap="round"
           initial={{ strokeDasharray: c, strokeDashoffset: c }}
           animate={{ strokeDashoffset: c - (pct / 100) * c }}
           transition={{ type: "tween", ease, duration: 0.8 }}
         />
-        <text
-          x="26"
-          y="30"
-          textAnchor="middle"
-          fontSize="11"
-          fontWeight="600"
-          style={{ fill: "var(--foreground)" }}
-        >
+        <text x="26" y="30" textAnchor="middle" fontSize="11" fontWeight="600" style={{ fill: "var(--foreground)" }}>
           {pct}%
         </text>
       </svg>
