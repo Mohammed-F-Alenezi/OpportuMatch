@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import HeroOrbCTA from "@/components/HeroOrbCTA";
-
 import RagChatSection from "@/components/RagChatSection";
 import { X } from "lucide-react";
 
@@ -23,18 +22,15 @@ type Match = {
   source_url?: string | null;
   rank?: number | null;
   run_at?: string | null;
-
   score_rule?: number | null;
   score_content?: number | null;
   score_goal?: number | null;
   score_final_raw?: number | null;
   score_final_cal?: number | null;
   raw_distance?: number | null;
-
   subs_sector?: number | null;
   subs_stage?: number | null;
   subs_funding?: number | null;
-
   reasons?: any;
   improvements?: any;
   evidence_project?: any;
@@ -72,10 +68,10 @@ function sortMatches(ms: Match[]) {
   copy.sort((a, b) => {
     const ra = a.rank ?? Number.POSITIVE_INFINITY;
     const rb = b.rank ?? Number.POSITIVE_INFINITY;
-    if (ra !== rb) return ra - rb; // lower rank = better
+    if (ra !== rb) return ra - rb;
     const sa = a.score_final_cal ?? a.score_final_raw ?? 0;
     const sb = b.score_final_cal ?? b.score_final_raw ?? 0;
-    return sb - sa; // higher score = better
+    return sb - sa;
   });
   return copy.slice(0, 5);
 }
@@ -91,8 +87,21 @@ export default function Page() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
-  // Controls the Rashid chat overlay
+  // Rashid overlay state
   const [ragOpen, setRagOpen] = useState(false);
+
+  // lock page scroll while overlay is open + close on Esc
+  useEffect(() => {
+    if (!ragOpen) return;
+    const prev = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setRagOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.documentElement.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [ragOpen]);
 
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
@@ -114,10 +123,9 @@ export default function Page() {
         const pJson = await pRes.json();
         const mJson = await mRes.json();
         const sorted = sortMatches(mJson.matches ?? []);
-
         setProject(pJson.project);
         setMatches(sorted);
-        setActiveIdx(0); // default to best (highest ranking)
+        setActiveIdx(0);
       } catch (e: any) {
         setErr(e?.message || "Failed to load");
       } finally {
@@ -157,11 +165,7 @@ export default function Page() {
   }
 
   return (
-    <main
-      dir="rtl"
-      className="mx-auto max-w-7xl px-4 py-6 md:py-8"
-      style={{ color: "var(--foreground)" }}
-    >
+    <main dir="rtl" className="mx-auto max-w-7xl px-4 py-6 md:py-8" style={{ color: "var(--foreground)" }}>
       <div className="mb-4 pr-2 text-lg md:text-xl font-semibold">{project.name}</div>
 
       <div dir="ltr" className="grid md:grid-cols-3 gap-6 items-stretch">
@@ -186,8 +190,7 @@ export default function Page() {
                   style={{
                     width: 160,
                     height: 160,
-                    background:
-                      "color-mix(in oklab, var(--card) 70%, var(--background))",
+                    background: "color-mix(in oklab, var(--card) 70%, var(--background))",
                     borderColor: "color-mix(in oklab, var(--border) 70%, transparent)",
                     opacity: 0.35,
                   }}
@@ -197,7 +200,7 @@ export default function Page() {
           </div>
         </section>
 
-        {/* RIGHT: big green card */}
+        {/* RIGHT: big card + orb */}
         <section className="md:col-span-2">
           <AnimatePresence mode="wait">
             {active && (
@@ -212,34 +215,45 @@ export default function Page() {
         </section>
       </div>
 
-      {/* ==== Rashid RAG Overlay (inline, replaces BubbleRagOverlay) ==== */}
+      {/* ===== Overlay (full screen, blurred backdrop, orb morph) ===== */}
       <AnimatePresence>
         {ragOpen && (
-          <motion.div
-            key="rag-overlay"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[80]"
-            style={{
-              background:
-                "linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,.65))",
-              backdropFilter: "blur(6px)",
-            }}
-          >
+          <>
+            {/* Backdrop */}
             <motion.div
-              initial={{ y: 24, opacity: 0, scale: 0.99 }}
-              animate={{ y: 0, opacity: 1, scale: 1 }}
-              exit={{ y: 16, opacity: 0, scale: 0.995 }}
+              className="fixed inset-0 z-[98]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
               transition={{ type: "tween", ease: EASE, duration: 0.25 }}
-              className="absolute inset-x-4 md:inset-x-auto md:right-6 top-6 bottom-6 md:w-[640px] rounded-3xl overflow-hidden border"
               style={{
-                background: "color-mix(in oklab, var(--card) 92%, transparent)",
+                background: "linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,.65))",
+                backdropFilter: "blur(6px)",
+              }}
+              onClick={() => setRagOpen(false)}
+            />
+            {/* Container that morphs from the orb */}
+            <motion.div
+              layoutId="rag-orb"                 // <— matches HeroOrbCTA for smooth morph
+              className="fixed z-[99] overflow-hidden border"
+              initial={false}
+              animate={{
+                top: 16,
+                right: 16,
+                bottom: 16,
+                left: 16,
+                borderRadius: 24,
+                opacity: 1,
+              }}
+              exit={{ borderRadius: 9999, opacity: 0 }}
+              transition={{ type: "tween", ease: EASE, duration: 0.32 }}
+              style={{
+                background: "color-mix(in oklab, var(--card) 94%, transparent)",
                 borderColor: "var(--border)",
-                boxShadow: "0 30px 80px rgba(0,0,0,.4)",
+                boxShadow: "0 30px 80px rgba(0,0,0,.45)",
               }}
             >
-              {/* overlay header */}
+              {/* Header */}
               <div
                 className="flex items-center justify-between px-4 py-3 border-b"
                 style={{ borderColor: "var(--border)" }}
@@ -256,12 +270,12 @@ export default function Page() {
                 </button>
               </div>
 
-              {/* the chat itself */}
-              <div className="h-full">
+              {/* Chat body fills everything below header */}
+              <div className="h-[calc(100%-48px)]">
                 <RagChatSection />
               </div>
             </motion.div>
-          </motion.div>
+          </>
         )}
       </AnimatePresence>
     </main>
@@ -350,13 +364,11 @@ function BigMatchCard({
       />
 
       <div className="relative z-10 flex items-center justify-between gap-4">
-        {/* left: ring + title + chat button */}
         <div className="flex items-center gap-4">
           <Ring value={score} size={56} />
           <div>
             <div className="flex items-center flex-wrap gap-2" dir="ltr">
-              {/* Bubble button appears to the LEFT of the title in RTL */}
-              <HeroOrbCTA size={60} label="حسن مشروعك" onOpen={onChat} />
+              <HeroOrbCTA size={60} label="حسّن مشروعك" onOpen={onChat} />
               <h3 className="text-l md:text-2xl font-bold" dir="ltr">
                 {m.program_name || "برنامج بدون اسم"}
               </h3>
@@ -389,11 +401,7 @@ function BigMatchCard({
         <Meter label="مواءمة الأهداف" value={pct(m.score_goal)} />
         <Meter
           label="القرب الدلالي"
-          value={
-            m.raw_distance != null
-              ? clamp(100 - Math.round(m.raw_distance * 100))
-              : null
-          }
+          value={m.raw_distance != null ? clamp(100 - Math.round(m.raw_distance * 100)) : null}
           hint="% أعلى يعني أقرب (1 - raw_distance)"
         />
       </div>
@@ -424,8 +432,8 @@ function BigMatchCard({
 
       {(evProj.length > 0 || evProg.length > 0) && (
         <div className="relative z-10 mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-          <Box title="شواهد من وصف مشروعك" items={evProj} />
-          <Box title="شواهد من وثائق البرنامج" items={evProg} />
+          <Box title="شواهد من وصف مشروعك" items={toLines(m.evidence_project)} />
+          <Box title="شواهد من وثائق البرنامج" items={toLines(m.evidence_program)} />
         </div>
       )}
     </motion.article>
@@ -434,28 +442,13 @@ function BigMatchCard({
 
 /* ---------- atoms ---------- */
 
-function Ring({
-  value,
-  size = 52,
-  stroke = 6,
-}: {
-  value: number;
-  size?: number;
-  stroke?: number;
-}) {
+function Ring({ value, size = 52, stroke = 6 }: { value: number; size?: number; stroke?: number }) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const v = clamp(value);
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0">
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        stroke="color-mix(in oklab, var(--border) 80%, transparent)"
-        strokeWidth={stroke}
-        fill="none"
-      />
+      <circle cx={size / 2} cy={size / 2} r={r} stroke="color-mix(in oklab, var(--border) 80%, transparent)" strokeWidth={stroke} fill="none" />
       <motion.circle
         cx={size / 2}
         cy={size / 2}
@@ -486,24 +479,12 @@ function Ring({
 function Meter({ label, value, hint }: { label: string; value: number | null; hint?: string }) {
   const pctVal = value ?? 0;
   return (
-    <div
-      className="rounded-xl border p-3"
-      style={{ borderColor: "var(--border)", background: "var(--card)" }}
-    >
+    <div className="rounded-xl border p-3" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
       <div className="text-xs mb-1" style={{ color: "var(--subtext-light)" }}>
         {label}
       </div>
-      <div
-        className="h-2.5 rounded-full overflow-hidden"
-        style={{ background: "color-mix(in oklab, var(--foreground) 10%, transparent)" }}
-      >
-        <motion.div
-          className="h-full"
-          style={{ background: "var(--brand)" }}
-          initial={{ width: 0 }}
-          animate={{ width: `${pctVal}%` }}
-          transition={{ type: "tween", ease: EASE, duration: 0.6 }}
-        />
+      <div className="h-2.5 rounded-full overflow-hidden" style={{ background: "color-mix(in oklab, var(--foreground) 10%, transparent)" }}>
+        <motion.div className="h-full" style={{ background: "var(--brand)" }} initial={{ width: 0 }} animate={{ width: `${pctVal}%` }} transition={{ type: "tween", ease: EASE, duration: 0.6 }} />
       </div>
       <div className="mt-1 text-xs">{value != null ? `${pctVal}%` : "—"}</div>
       {hint && (
@@ -537,9 +518,7 @@ function Box({ title, items, neutral = false }: { title: string; items: string[]
       className="rounded-xl border p-3"
       style={{
         borderColor: "var(--border)",
-        background: neutral
-          ? "color-mix(in oklab, var(--foreground) 6%, transparent)"
-          : "color-mix(in oklab, var(--brand) 8%, var(--card))",
+        background: neutral ? "color-mix(in oklab, var(--foreground) 6%, transparent)" : "color-mix(in oklab, var(--brand) 8%, var(--card))",
       }}
     >
       <div className="text-xs mb-2" style={{ color: "var(--subtext-light)" }}>
