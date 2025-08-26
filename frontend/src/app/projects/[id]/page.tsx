@@ -154,6 +154,22 @@ export default function Page() {
     );
   }
 
+  if (!matches.length) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-12 text-center" style={{ color: "var(--foreground)" }}>
+        <div className="text-lg font-semibold mb-2">لا توجد توصيات بعد</div>
+        <p className="opacity-80 mb-4">أكمل بيانات مشروعك ثم أعد تشغيل المطابقة.</p>
+        <button
+          onClick={() => router.push("/projects/select")}
+          className="rounded-xl px-4 py-2 text-sm"
+          style={{ background: "var(--brand)", color: "white" }}
+        >
+          الرجوع لقائمة المشاريع
+        </button>
+      </main>
+    );
+  }
+
   return (
     <LayoutGroup id="rag-orb-group">
       <main
@@ -229,13 +245,11 @@ function SmallMatchCard({ m, onSelect }: { m: Match; onSelect: () => void }) {
       onClick={onSelect}
       initial={{ opacity: 0, y: 8, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      whileHover={{ y: -3, boxShadow: "0 10px 20px rgba(0,0,0,.18)" }}
+      whileHover={{ y: -3, scale: 1.02, boxShadow: "0 12px 24px rgba(0,0,0,.18)" }}
       whileTap={{ scale: 0.985 }}
       transition={{ type: "tween", ease: EASE, duration: 0.22 }}
-      className="rounded-2xl border p-4 text-right overflow-hidden"
+      className="rounded-2xl border p-4 text-right overflow-hidden w-[168px] h-[168px]"
       style={{
-        width: 180,
-        height: 180,
         background: "color-mix(in oklab, var(--card) 70%, var(--background))",
         borderColor: "color-mix(in oklab, var(--border) 70%, transparent)",
       }}
@@ -303,7 +317,10 @@ function BigMatchCard({
           <Ring value={score} size={56} />
           <div>
             <div className="flex items-center flex-wrap gap-2">
-              <h3 className="text-xl md:text-2xl font-bold">
+              <h3
+                className="text-xl md:text-2xl font-bold line-clamp-1"
+                title={m.program_name || "برنامج بدون اسم"}
+              >
                 {m.program_name || "برنامج بدون اسم"}
               </h3>
 
@@ -316,11 +333,22 @@ function BigMatchCard({
             <div className="text-xs mt-0.5" style={{ color: "var(--subtext-light)" }}>
               الترتيب {m.rank != null ? `#${m.rank}` : "—"} · آخر تشغيل:{" "}
               {m.run_at ? new Date(m.run_at).toLocaleString("ar-SA") : "—"}
+
+              {m.source_url && (
+                <a
+                  href={m.source_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-sm underline underline-offset-4 shrink-0 mr-3"
+                  style={{ color: "var(--brand)" }}
+                  title="فتح رابط البرنامج"
+                >
+                  فتح رابط البرنامج
+                </a>
+              )}
             </div>
           </div>
         </div>
-
-
       </div>
 
       <div className="relative z-10 mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -352,17 +380,6 @@ function BigMatchCard({
           >
             احتياج المشروع · {project.funding_need.toLocaleString()} ﷼
           </span>
-        )}
-                {m.source_url && (
-          <a
-            href={m.source_url}
-            target="_blank"
-            rel="noreferrer"
-            className="text-sm underline underline-offset-4 shrink-0 mr-3"
-            style={{ color: "var(--brand)" }}
-          >
-            فتح رابط البرنامج
-          </a>
         )}
       </div>
 
@@ -481,10 +498,11 @@ function Box({ title, items, neutral = false }: { title: string; items: string[]
           : "color-mix(in oklab, var(--brand) 8%, var(--card))",
       }}
     >
-      <div className="text-xs mb-2" style={{ color: "var(--subtext-light)" }}>
+      <div className="text-sm font-semibold mb-2" style={{ color: "var(--foreground)" }}>
         {title}
       </div>
-      <ul className="list-disc text-sm pr-5 space-y-1">
+
+      <ul className="list-disc text-sm pr-5 space-y-1" style={{ color: "var(--subtext-light)" }}>
         {items.map((t, i) => (
           <li key={i}>{t}</li>
         ))}
