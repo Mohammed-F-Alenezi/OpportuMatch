@@ -7,6 +7,8 @@ import { Bot, Send, Copy, RefreshCcw } from "lucide-react";
 type Msg = { id: string; role: "user" | "ai"; content: string; citations?: string[] };
 type Mood = "idle" | "smile" | "thinking";
 
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
+
 export default function RagChatSection() {
   const [messages, setMessages] = useState<Msg[]>([
     {
@@ -20,6 +22,10 @@ export default function RagChatSection() {
   const [mood, setMood] = useState<Mood>("idle");
   const feedRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [matchResultId, setMatchResultId] = useState("");
+  const [initialized, setInitialized] = useState(false);
+  const [initInfo, setInitInfo] = useState<{ source_url?: string; chunks_indexed?: number } | null>(null);
+
   const EASE: number[] = [0.22, 1, 0.36, 1];
 
   useEffect(() => {
@@ -37,9 +43,9 @@ export default function RagChatSection() {
     requestAnimationFrame(() => inputRef.current?.focus());
   }
 
-  function copyAll() {
+  async function copyAll() {
     const txt = messages.map((m) => `${m.role === "user" ? "أنت" : "المساعد"}:\n${m.content}`).join("\n\n");
-    navigator.clipboard.writeText(txt);
+    await navigator.clipboard.writeText(txt);
   }
 
   function clearAll() {
@@ -47,25 +53,67 @@ export default function RagChatSection() {
     setInput("");
   }
 
-  function send() {
+  async function initFromMatchResult() {
+    const mrid = matchResultId.trim();
+    if (!mrid) {
+      alert("أدخل Match Result ID أولًا");
+      return;
+    }
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE}/init`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ match_result_id: mrid }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setInitialized(true);
+      setInitInfo({ source_url: data?.source_url, chunks_indexed: data?.chunks_indexed });
+    } catch (e: any) {
+      alert(`فشل التهيئة: ${e?.message || e}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function send() {
     const text = input.trim();
     if (!text || loading) return;
-    setMessages((m) => [...m, { id: crypto.randomUUID(), role: "user", content: text }]);
+    if (!initialized) {
+      alert("ابدأ بالتهيئة من Match Result ID أولًا.");
+      return;
+    }
+    const newUser: Msg = { id: crypto.randomUUID(), role: "user", content: text };
+    setMessages((m) => [...m, newUser]);
     setInput("");
     setLoading(true);
-    setTimeout(() => {
-      setMessages((m) => [
-        ...m,
-        {
-          id: crypto.randomUUID(),
-          role: "ai",
-          content:
-            "ترشيح مبدئي: برنامج الابتكار المبكر + منحة تطوير النموذج الأولي. السبب: تطابق القطاع والمرحلة وسقف التمويل.",
-          citations: ["منشآت — دليل البرامج", "صندوق الابتكار — الشروط العامة"],
-        },
-      ]);
+
+    try {
+      const res = await fetch(`${API_BASE}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ match_result_id: matchResultId, message: text }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      const aiMsg: Msg = {
+        id: crypto.randomUUID(),
+        role: "ai",
+        content: data?.reply || "—",
+        citations: Array.isArray(data?.citations) ? data.citations : undefined,
+      };
+      setMessages((m) => [...m, aiMsg]);
+    } catch (e: any) {
+      const err: Msg = {
+        id: crypto.randomUUID(),
+        role: "ai",
+        content: `حصل خطأ أثناء المعالجة: ${e?.message || e}`,
+      };
+      setMessages((m) => [...m, err]);
+    } finally {
       setLoading(false);
-    }, 650);
+    }
   }
 
   return (
@@ -87,7 +135,8 @@ export default function RagChatSection() {
           <div
             className="sticky top-0 z-10 px-4 md:px-5 py-3 border-b"
             style={{
-              background: "linear-gradient(180deg, color-mix(in oklab, var(--card) 92%, transparent), color-mix(in oklab, var(--card) 86%, transparent))",
+              background:
+                "linear-gradient(180deg, color-mix(in oklab, var(--card) 92%, transparent), color-mix(in oklab, var(--card) 86%, transparent))",
               borderColor: "var(--border)",
               backdropFilter: "blur(8px)",
             }}
@@ -118,6 +167,30 @@ export default function RagChatSection() {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* init bar */}
+          <div className="px-4 md:px-5 py-2 flex flex-wrap items-center gap-2 border-b" style={{ borderColor: "var(--border)" }}>
+            <input
+              value={matchResultId}
+              onChange={(e) => setMatchResultId(e.target.value)}
+              placeholder="Match Result ID"
+              className="rounded-xl border px-3 py-1.5 text-xs bg-transparent"
+              style={{ borderColor: "var(--border)" }}
+            />
+            <button
+              onClick={initFromMatchResult}
+              disabled={loading}
+              className="rounded-xl border px-3 py-1.5 text-xs hover:opacity-90"
+              style={{ borderColor: "var(--border)", background: "color-mix(in oklab, var(--card) 78%, transparent)" }}
+            >
+              تهيئة
+            </button>
+            {initialized && (
+              <span className="text-[11px] opacity-75">
+                تم — {initInfo?.source_url ? "تم تحميل المصدر" : "لا يوجد مصدر"} • مقاطع: {initInfo?.chunks_indexed ?? 0}
+              </span>
+            )}
           </div>
 
           {/* suggestion chips */}
@@ -204,7 +277,8 @@ export default function RagChatSection() {
               className="flex items-end gap-2 rounded-2xl border p-2"
               style={{
                 borderColor: "var(--border)",
-                background: "linear-gradient(180deg, color-mix(in oklab, var(--card) 96%, transparent), color-mix(in oklab, var(--card) 90%, transparent))",
+                background:
+                  "linear-gradient(180deg, color-mix(in oklab, var(--card) 96%, transparent), color-mix(in oklab, var(--card) 90%, transparent))",
                 boxShadow: "0 22px 48px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.05)",
                 backdropFilter: "blur(8px)",
               }}
@@ -251,7 +325,7 @@ export default function RagChatSection() {
         </div>
       </section>
 
-      {/* RIGHT — context rail (dimensional) */}
+      {/* RIGHT — context rail */}
       <aside
         className="hidden lg:flex flex-col rounded-3xl ml-3 overflow-hidden"
         style={{
@@ -263,7 +337,13 @@ export default function RagChatSection() {
       >
         <div className="px-4 py-3 border-b" style={{ borderColor: "var(--border)" }}>
           <div className="font-semibold">سياق مُسترجَع</div>
-          <div className="text-xs opacity-70 mt-1">مقاطع ستظهر هنا لاحقًا</div>
+          <div className="text-xs opacity-70 mt-1">
+            {initialized
+              ? initInfo?.source_url
+                ? `المصدر: ${initInfo.source_url} • مقاطع: ${initInfo.chunks_indexed ?? 0}`
+                : "لا يوجد مصدر في match_results"
+              : "ابدأ بالتهيئة من Match Result"}
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scroll">
           <ContextCard title="شروط الأهلية">
