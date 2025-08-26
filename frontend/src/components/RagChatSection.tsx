@@ -2,36 +2,159 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Bot, Send, Copy, RefreshCcw } from "lucide-react";
+import {
+  Bot,
+  Send,
+  Copy,
+  RefreshCcw,
+  Eye,
+  Mic,
+  Volume2,
+  PauseCircle,
+  AlertCircle,
+} from "lucide-react";
+import { io, Socket } from "socket.io-client";
 
 type Msg = { id: string; role: "user" | "ai"; content: string; citations?: string[] };
 type Mood = "idle" | "smile" | "thinking";
+
+const WS_URL = process.env.NEXT_PUBLIC_RASHID_WS_URL || "http://localhost:5000";
 
 export default function RagChatSection() {
   const [messages, setMessages] = useState<Msg[]>([
     {
       id: "m1",
       role: "ai",
-      content: "مرحبًا 👋 أنا راشد. صف مشروعك (القطاع/المرحلة/التمويل) وسأرشح برامج مناسبة.",
+      content:
+        "مرحبًا، أنا راشد. صف مشروعك (القطاع/المرحلة/التمويل) وسأرشّح برامج مناسبة.",
     },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [mood, setMood] = useState<Mood>("idle");
+
+  // Rashid vision/voice state
+  const [avatarSrc, setAvatarSrc] = useState("/assets/avatar.png");
+  const [present, setPresent] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const [micHint, setMicHint] = useState("Idle. Waiting for a person in front of the camera.");
+  const [voiceOn, setVoiceOn] = useState(false); // toggle by clicking RashidFace
+
   const feedRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const socketRef = useRef<Socket | null>(null);
+  const recRef = useRef<SpeechRecognition | null>(null);
   const EASE: number[] = [0.22, 1, 0.36, 1];
 
+  // Auto scroll feed
   useEffect(() => {
     feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
+  // Mood logic
   useEffect(() => {
     if (loading) setMood("thinking");
     else if (input.trim()) setMood("smile");
     else setMood("idle");
   }, [input, loading]);
 
+  // Socket wiring
+  useEffect(() => {
+    const s = io(WS_URL, { transports: ["websocket"] });
+    socketRef.current = s;
+
+    s.on("video_frame", ({ frame }) => setAvatarSrc(`data:image/jpeg;base64,${frame}`));
+    s.on("presence", ({ present }) => setPresent(!!present));
+    s.on("speak_state", ({ speaking }) => setSpeaking(!!speaking));
+
+    s.on("server_response", ({ data }) => {
+      if (typeof data === "string" && data.trim()) {
+        setMessages((m) => [...m, { id: crypto.randomUUID(), role: "ai", content: data.trim() }]);
+      }
+    });
+
+    s.on("voice_response", ({ text }) => {
+      if (typeof text === "string" && text.trim()) {
+        setMessages((m) => [...m, { id: crypto.randomUUID(), role: "ai", content: text.trim() }]);
+        if ("speechSynthesis" in window && voiceOn) {
+          window.speechSynthesis.cancel();
+          const u = new SpeechSynthesisUtterance(text);
+          u.lang = "ar-SA";
+          window.speechSynthesis.speak(u);
+        }
+      }
+    });
+
+    s.emit("start_stream");
+
+    return () => {
+      try { s.disconnect(); } catch {}
+      try { (recRef.current as any)?.abort(); } catch {}
+      window.speechSynthesis?.cancel();
+    };
+  }, [voiceOn]);
+
+  // ASR helpers
+  function ensureASR() {
+    if (recRef.current) return;
+    const SR: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) {
+      setMicHint("Browser does not support SpeechRecognition. Use Chrome on https or localhost.");
+      return;
+    }
+    const r: SpeechRecognition = new SR();
+    r.lang = "ar-SA";
+    (r as any).continuous = true;
+    (r as any).interimResults = false;
+
+    r.onstart = () => setMicHint("Listening.");
+    r.onend = () => {
+      if (voiceOn && present && !speaking) {
+        try { r.start(); } catch {}
+      }
+    };
+    r.onerror = () => {
+      if (voiceOn && present && !speaking) {
+        setTimeout(() => { try { r.start(); } catch {} }, 350);
+      }
+    };
+    r.onresult = (e: any) => {
+      const txt = (e.results?.[e.resultIndex]?.[0]?.transcript || "").trim();
+      if (!txt) return;
+      socketRef.current?.emit("voice_input", { text: txt });
+      setMessages((m) => [...m, { id: crypto.randomUUID(), role: "user", content: txt }]);
+    };
+
+    recRef.current = r;
+  }
+
+  function updateMicState() {
+    if (!voiceOn) {
+      setMicHint("Voice is off. Click Rashid to enable.");
+      try { (recRef.current as any)?.abort(); } catch {}
+      return;
+    }
+    if (speaking) {
+      setMicHint("Rashid is speaking.");
+      try { (recRef.current as any)?.abort(); } catch {}
+      return;
+    }
+    if (!present) {
+      setMicHint("Idle. Waiting for a person in front of the camera.");
+      try { (recRef.current as any)?.abort(); } catch {}
+      return;
+    }
+    ensureASR();
+    setMicHint("Listening.");
+    try { recRef.current?.start(); } catch {}
+  }
+
+  useEffect(() => {
+    updateMicState();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceOn, present, speaking]);
+
+  // Chat actions
   function paste(txt: string) {
     setInput((p) => (p.trim() ? `${p} ${txt}` : txt));
     requestAnimationFrame(() => inputRef.current?.focus());
@@ -50,29 +173,22 @@ export default function RagChatSection() {
   function send() {
     const text = input.trim();
     if (!text || loading) return;
+
+    // echo locally
     setMessages((m) => [...m, { id: crypto.randomUUID(), role: "user", content: text }]);
     setInput("");
     setLoading(true);
-    setTimeout(() => {
-      setMessages((m) => [
-        ...m,
-        {
-          id: crypto.randomUUID(),
-          role: "ai",
-          content:
-            "ترشيح مبدئي: برنامج الابتكار المبكر + منحة تطوير النموذج الأولي. السبب: تطابق القطاع والمرحلة وسقف التمويل.",
-          citations: ["منشآت — دليل البرامج", "صندوق الابتكار — الشروط العامة"],
-        },
-      ]);
-      setLoading(false);
-    }, 650);
+
+    // send to backend
+    socketRef.current?.emit("user_text", { text });
+
+    setLoading(false);
   }
 
   return (
     <div dir="rtl" className="relative h-full w-full grid" style={{ gridTemplateColumns: "1fr 300px" }}>
-      {/* CENTER — framed glass canvas */}
+      {/* CENTER — chat */}
       <section className="relative min-w-0 flex flex-col">
-        {/* inner container */}
         <div
           className="relative rounded-[24px] overflow-hidden"
           style={{
@@ -120,24 +236,6 @@ export default function RagChatSection() {
             </div>
           </div>
 
-          {/* suggestion chips */}
-          <div className="px-4 md:px-5 pt-3 flex flex-wrap items-center gap-2">
-            {[
-              "أنا متجر إلكتروني للمنتجات الحرفية وأحتاج تمويلًا مبكرًا",
-              "مشروعي في مرحلة نموذج أولي — ما البرامج المناسبة؟",
-              "هل يتوافق مشروعي مع شروط منشآت؟",
-            ].map((s, i) => (
-              <button
-                key={i}
-                onClick={() => paste(s)}
-                className="rounded-xl border px-3 py-1.5 text-xs hover:opacity-90"
-                style={{ borderColor: "var(--border)", background: "color-mix(in oklab, var(--card) 78%, transparent)" }}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-
           {/* FEED */}
           <div ref={feedRef} className="flex-1 overflow-y-auto px-4 md:px-5 pb-28 pt-4 space-y-4 custom-scroll">
             {messages.map((m) => (
@@ -154,41 +252,16 @@ export default function RagChatSection() {
                       : "linear-gradient(180deg, color-mix(in oklab, var(--card) 97%, transparent), color-mix(in oklab, var(--card) 90%, transparent))",
                   color: m.role === "user" ? "white" : "var(--foreground)",
                   border: "1px solid var(--border)",
-                  boxShadow:
-                    m.role === "user"
-                      ? "0 14px 34px rgba(27,131,84,.24), inset 0 1px 0 rgba(255,255,255,.06)"
-                      : "0 12px 28px rgba(0,0,0,.12), inset 0 1px 0 rgba(255,255,255,.06)",
                 }}
               >
                 <div className="mb-1 text-xs opacity-80">{m.role === "ai" ? "المساعد" : "أنت"}</div>
                 <div style={{ maxWidth: "68ch" }}>{m.content}</div>
-
-                {!!m.citations?.length && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {m.citations.map((c, i) => (
-                      <button
-                        key={i}
-                        onClick={() => paste(c)}
-                        className="text-[11px] rounded-md px-2 py-1 border hover:opacity-90"
-                        style={{ borderColor: "var(--border)", background: "color-mix(in oklab, var(--card) 88%, transparent)" }}
-                      >
-                        {c}
-                      </button>
-                    ))}
-                  </div>
-                )}
               </motion.div>
             ))}
 
             {loading && (
-              <div
-                className="relative max-w-[86%] rounded-2xl p-3 text-sm border"
-                style={{
-                  borderColor: "var(--border)",
-                  background: "linear-gradient(180deg, color-mix(in oklab, var(--card) 96%, transparent), color-mix(in oklab, var(--card) 92%, transparent))",
-                  boxShadow: "0 10px 26px rgba(0,0,0,.10), inset 0 1px 0 rgba(255,255,255,.05)",
-                }}
-              >
+              <div className="relative max-w-[86%] rounded-2xl p-3 text-sm border"
+                   style={{ borderColor: "var(--border)", background: "linear-gradient(180deg, color-mix(in oklab, var(--card) 96%, transparent), color-mix(in oklab, var(--card) 92%, transparent))" }}>
                 <div className="mb-1 text-xs opacity-80">المساعد</div>
                 <Dots />
               </div>
@@ -196,26 +269,17 @@ export default function RagChatSection() {
           </div>
 
           {/* COMPOSER */}
-          <div
-            className="absolute bottom-0 inset-x-0 px-4 md:px-5 pb-4 pt-2"
-            style={{ background: "linear-gradient(to top, color-mix(in oklab, var(--card) 95%, transparent), transparent)" }}
-          >
-            <div
-              className="flex items-end gap-2 rounded-2xl border p-2"
-              style={{
-                borderColor: "var(--border)",
-                background: "linear-gradient(180deg, color-mix(in oklab, var(--card) 96%, transparent), color-mix(in oklab, var(--card) 90%, transparent))",
-                boxShadow: "0 22px 48px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.05)",
-                backdropFilter: "blur(8px)",
-              }}
-            >
-              {/* Rashid button (face) */}
+          <div className="absolute bottom-0 inset-x-0 px-4 md:px-5 pb-4 pt-2"
+               style={{ background: "linear-gradient(to top, color-mix(in oklab, var(--card) 95%, transparent), transparent)" }}>
+            <div className="flex items-end gap-2 rounded-2xl border p-2"
+                 style={{ borderColor: "var(--border)", background: "linear-gradient(180deg, color-mix(in oklab, var(--card) 96%, transparent), color-mix(in oklab, var(--card) 90%, transparent))" }}>
+              {/* Rashid toggle */}
               <button
                 type="button"
                 className="shrink-0 grid place-items-center rounded-xl border w-11 h-11"
                 style={{ borderColor: "var(--border)", background: "color-mix(in oklab, var(--card) 94%, transparent)" }}
-                title="راشد — (واجهة فقط)"
-                onClick={() => alert("واجهة فقط — سيتم تفعيل وضع راشد لاحقًا.")}
+                onClick={() => setVoiceOn(v => !v)}
+                title="Toggle Rashid voice mode"
               >
                 <RashidFace mood={mood} />
               </button>
@@ -238,136 +302,72 @@ export default function RagChatSection() {
               <button
                 onClick={send}
                 disabled={loading}
-                className="shrink-0 rounded-xl px-3 py-2 text-sm text-white transform-gpu"
-                style={{ background: "var(--brand)", boxShadow: "0 0 26px rgba(27,131,84,.35)" }}
+                className="shrink-0 rounded-xl px-3 py-2 text-sm text-white"
+                style={{ background: "var(--brand)" }}
               >
                 <div className="flex items-center gap-1">
                   إرسال <Send className="w-4 h-4" />
                 </div>
               </button>
             </div>
-            <div className="mt-2 px-1 text-[11px] opacity-70">تلميح: راشد يبتسم أثناء الكتابة ويتحوّل إلى التفكير بعد الإرسال.</div>
+            <div className="mt-2 px-1 text-[11px] opacity-70">{micHint}</div>
           </div>
         </div>
       </section>
 
-      {/* RIGHT — context rail (dimensional) */}
-      <aside
-        className="hidden lg:flex flex-col rounded-3xl ml-3 overflow-hidden"
-        style={{
-          background: "color-mix(in oklab, var(--card) 88%, transparent)",
-          border: "1px solid var(--border)",
-          boxShadow: "0 18px 50px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.05)",
-          backdropFilter: "blur(8px)",
-        }}
-      >
+      {/* RIGHT — Rashid Vision panel */}
+      <aside className="hidden lg:flex flex-col rounded-3xl ml-3 overflow-hidden"
+             style={{ background: "color-mix(in oklab, var(--card) 88%, transparent)", border: "1px solid var(--border)" }}>
         <div className="px-4 py-3 border-b" style={{ borderColor: "var(--border)" }}>
-          <div className="font-semibold">سياق مُسترجَع</div>
-          <div className="text-xs opacity-70 mt-1">مقاطع ستظهر هنا لاحقًا</div>
+          <div className="font-semibold">Rashid Vision</div>
         </div>
         <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scroll">
-          <ContextCard title="شروط الأهلية">
-            • القطاع: تقني/ابتكار<br />• المرحلة: فكرة/نموذج أولي<br />• التمويل: حتى 250 ألف
-          </ContextCard>
-          <ContextCard title="توافق الأهداف">
-            يركّز البرنامج على بناء النماذج الأولية وتسريع التحقق من الملاءمة السوقية.
-          </ContextCard>
+          <div className="w-full aspect-video rounded-xl overflow-hidden border"
+               style={{ borderColor: "var(--border)" }}>
+            <img src={avatarSrc} alt="Rashid" className="w-full h-full object-contain bg-black" />
+          </div>
+          <div className="text-xs opacity-80 flex items-center gap-1">
+            {speaking ? <><Volume2 className="w-4 h-4" /> Speaking…</> :
+             present ? <><Mic className="w-4 h-4" /> Listening…</> :
+             <><PauseCircle className="w-4 h-4" /> Idle</>}
+          </div>
         </div>
       </aside>
-
-      {/* responsive */}
-      <style jsx>{`
-        @media (max-width: 1024px) {
-          div[dir="rtl"].relative.h-full.w-full.grid { grid-template-columns: 1fr; }
-        }
-      `}</style>
-
-      {/* scrollbars */}
-      <style jsx global>{`
-        .custom-scroll { scrollbar-width: thin; }
-        .custom-scroll::-webkit-scrollbar { height: 8px; width: 8px; }
-        .custom-scroll::-webkit-scrollbar-thumb {
-          background: color-mix(in oklab, var(--border) 80%, transparent);
-          border-radius: 999px;
-        }
-      `}</style>
     </div>
   );
 }
 
-/* mini components */
+/* helpers */
 function ToolbarGhost({ icon, text, onClick }: { icon: React.ReactNode; text: string; onClick?: () => void }) {
   return (
-    <button
-      onClick={onClick}
+    <button onClick={onClick}
       className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs hover:opacity-90"
-      style={{ borderColor: "var(--border)", background: "transparent" }}
-    >
+      style={{ borderColor: "var(--border)", background: "transparent" }}>
       {icon}{text}
     </button>
   );
 }
 
-function ContextCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div
-      className="rounded-xl p-3"
-      style={{
-        background:
-          "linear-gradient(180deg, color-mix(in oklab, var(--card) 96%, transparent), color-mix(in oklab, var(--card) 90%, transparent))",
-        border: "1px solid var(--border)",
-        boxShadow: "0 12px 30px rgba(0,0,0,.12), inset 0 1px 0 rgba(255,255,255,.05)",
-        backdropFilter: "blur(8px)",
-      }}
-    >
-      <div className="text-xs font-semibold mb-1">{title}</div>
-      <div className="text-xs opacity-80 leading-6">{children}</div>
-    </div>
-  );
-}
-
-/* راشد face */
+/* Rashid face */
 function RashidFace({ mood, size = 36 }: { mood: Mood; size?: number }) {
   return (
     <div style={{ width: size, height: size }}>
-      <motion.svg
-        viewBox="0 0 64 64"
-        className="block"
-        style={{ width: "100%", height: "100%" }}
+      <motion.svg viewBox="0 0 64 64" className="block" style={{ width: "100%", height: "100%" }}
         initial={false}
-        animate={mood === "thinking" ? { rotate: [-2, 2, -2], transition: { duration: 1.6, repeat: Infinity, ease: "easeInOut" } } : { rotate: 0 }}
-      >
-        <motion.circle
-          cx="32" cy="32" r="28"
-          fill="url(#skin)"
-          stroke="color-mix(in oklab, var(--border) 80%, transparent)"
-          strokeWidth="1"
+        animate={mood === "thinking" ? { rotate: [-2, 2, -2], transition: { duration: 1.6, repeat: Infinity } } : { rotate: 0 }}>
+        <motion.circle cx="32" cy="32" r="28" fill="url(#skin)"
+          stroke="color-mix(in oklab, var(--border) 80%, transparent)" strokeWidth="1"
           animate={mood !== "thinking" ? { scale: [1, 1.02, 1] } : { scale: 1 }}
-          transition={{ duration: 3, repeat: Infinity }}
-        />
+          transition={{ duration: 3, repeat: Infinity }} />
         <g fill="currentColor">
-          {mood === "smile" ? (
-            <>
-              <path d="M20 28 q4 6 8 0" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
-              <path d="M36 28 q4 6 8 0" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
-            </>
-          ) : (
-            <>
-              <circle cx="24" cy="28" r="2.6" />
-              <circle cx="40" cy="28" r="2.6" />
-            </>
-          )}
+          {mood === "smile"
+            ? (<><path d="M20 28 q4 6 8 0" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
+                <path d="M36 28 q4 6 8 0" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" /></>)
+            : (<><circle cx="24" cy="28" r="2.6" /><circle cx="40" cy="28" r="2.6" /></>)
+          }
         </g>
         {mood === "smile" && <path d="M22 40 q10 10 20 0" stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round" />}
         {mood === "idle" && <path d="M24 40 h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />}
-        {mood === "thinking" && (
-          <>
-            <path d="M24 42 q8 -6 16 0" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
-            <motion.circle cx="50" cy="14" r="2" fill="currentColor" animate={{ opacity: [0.2, 1, 0.2] }} transition={{ duration: 1.2, repeat: Infinity }} />
-            <motion.circle cx="55" cy="9" r="1.6" fill="currentColor" animate={{ opacity: [0.2, 1, 0.2] }} transition={{ duration: 1.2, repeat: Infinity, delay: 0.15 }} />
-          </>
-        )}
-        {mood === "smile" && (<><circle cx="18" cy="36" r="3.5" fill="rgba(255,120,120,.25)" /><circle cx="46" cy="36" r="3.5" fill="rgba(255,120,120,.25)" /></>)}
         <defs>
           <radialGradient id="skin" cx="50%" cy="40%" r="60%">
             <stop offset="0%" stopColor="color-mix(in oklab, var(--card) 98%, transparent)" />

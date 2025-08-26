@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import HeroOrbCTA from "@/components/HeroOrbCTA";
-import BubbleRagOverlay from "@/components/BubbleRagOverlay";
+
+import RagChatSection from "@/components/RagChatSection";
+import { X } from "lucide-react";
 
 type Project = {
   id: string;
@@ -89,6 +91,7 @@ export default function Page() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
+  // Controls the Rashid chat overlay
   const [ragOpen, setRagOpen] = useState(false);
 
   useEffect(() => {
@@ -209,8 +212,58 @@ export default function Page() {
         </section>
       </div>
 
-      {/* Full-page takeover overlay (morphs from the orb) */}
-      <BubbleRagOverlay open={ragOpen} onClose={() => setRagOpen(false)} />
+      {/* ==== Rashid RAG Overlay (inline, replaces BubbleRagOverlay) ==== */}
+      <AnimatePresence>
+        {ragOpen && (
+          <motion.div
+            key="rag-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[80]"
+            style={{
+              background:
+                "linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,.65))",
+              backdropFilter: "blur(6px)",
+            }}
+          >
+            <motion.div
+              initial={{ y: 24, opacity: 0, scale: 0.99 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 16, opacity: 0, scale: 0.995 }}
+              transition={{ type: "tween", ease: EASE, duration: 0.25 }}
+              className="absolute inset-x-4 md:inset-x-auto md:right-6 top-6 bottom-6 md:w-[640px] rounded-3xl overflow-hidden border"
+              style={{
+                background: "color-mix(in oklab, var(--card) 92%, transparent)",
+                borderColor: "var(--border)",
+                boxShadow: "0 30px 80px rgba(0,0,0,.4)",
+              }}
+            >
+              {/* overlay header */}
+              <div
+                className="flex items-center justify-between px-4 py-3 border-b"
+                style={{ borderColor: "var(--border)" }}
+              >
+                <div className="font-semibold">Rashid — RAG Chat</div>
+                <button
+                  onClick={() => setRagOpen(false)}
+                  className="rounded-lg border p-1.5 hover:opacity-90"
+                  style={{ borderColor: "var(--border)", background: "transparent" }}
+                  aria-label="Close chat"
+                  title="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* the chat itself */}
+              <div className="h-full">
+                <RagChatSection />
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </main>
   );
 }
@@ -274,7 +327,6 @@ function BigMatchCard({
       exit={{ opacity: 0, y: 10, scale: 0.985 }}
       transition={{ type: "tween", ease: EASE, duration: 0.35 }}
       className="relative rounded-3xl p-6 md:p-8 overflow-visible border"
-
       style={{
         background: "var(--card)",
         borderColor: "var(--border)",
@@ -302,10 +354,10 @@ function BigMatchCard({
         <div className="flex items-center gap-4">
           <Ring value={score} size={56} />
           <div>
-            <div className="flex items-center flex-wrap gap-2" dir='ltr'>
+            <div className="flex items-center flex-wrap gap-2" dir="ltr">
               {/* Bubble button appears to the LEFT of the title in RTL */}
-              <HeroOrbCTA size={44} label="حسن مشروعك" onOpen={onChat} />
-              <h3 className="text-xl md:text-2xl font-bold">
+              <HeroOrbCTA size={60} label="حسن مشروعك" onOpen={onChat} />
+              <h3 className="text-l md:text-2xl font-bold" dir="ltr">
                 {m.program_name || "برنامج بدون اسم"}
               </h3>
             </div>

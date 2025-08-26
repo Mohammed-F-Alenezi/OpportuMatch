@@ -45,7 +45,7 @@ export default function BubbleRagOverlay({
             onClick={onClose}
           />
 
-          {/* Shared-layout SHELL only (no content here) */}
+          {/* Shell */}
           <motion.div
             key="rag-shell"
             layoutId="rag-orb"
@@ -65,14 +65,14 @@ export default function BubbleRagOverlay({
               boxShadow: "0 28px 90px rgba(0,0,0,.28)",
             }}
           >
-            {/* CONTENT LAYER fills the shell; shows after shell expands */}
+            {/* Content */}
             <motion.div
               className="absolute inset-0 grid"
               style={{ gridTemplateRows: "auto 1fr" }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ type: "tween", ease: EASE, duration: 0.22, delay: 0.18 }} // <- delay avoids half title
+              transition={{ type: "tween", ease: EASE, duration: 0.22, delay: 0.18 }}
             >
               {/* Top bar */}
               <div
@@ -84,7 +84,6 @@ export default function BubbleRagOverlay({
                   backdropFilter: "blur(4px)",
                 }}
               >
-                {/* Make title flexible and non-clipping */}
                 <div className="font-semibold flex-1 min-w-0">
                   <span className="block truncate">المساعد الذكي (RAG)</span>
                 </div>
@@ -97,7 +96,7 @@ export default function BubbleRagOverlay({
                 </button>
               </div>
 
-              {/* Scrollable content */}
+              {/* Body */}
               <motion.div
                 key="rag-content"
                 className="relative z-10 overflow-auto p-4 sm:p-6"
