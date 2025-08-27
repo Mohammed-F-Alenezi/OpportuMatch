@@ -1,3 +1,4 @@
+// components/BubbleRagOverlay.tsx
 "use client";
 
 import { useEffect } from "react";
@@ -7,12 +8,13 @@ import RagChatSection from "@/components/RagChatSection";
 export default function BubbleRagOverlay({
   open,
   onClose,
-  matchResultId,                 // ✅ NEW
+  matchResultId,             // ✅ accept the prop
 }: {
   open: boolean;
   onClose: () => void;
-  matchResultId?: string;        // ✅ NEW
+  matchResultId?: string;     // ✅ make it optional
 }) {
+  // lock scroll while open
   useEffect(() => {
     if (!open) return;
     const prev = document.documentElement.style.overflow;
@@ -20,6 +22,7 @@ export default function BubbleRagOverlay({
     return () => { document.documentElement.style.overflow = prev; };
   }, [open]);
 
+  // close with Escape
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -41,7 +44,6 @@ export default function BubbleRagOverlay({
             style={{ background: "color-mix(in oklab, var(--background) 55%, black)", backdropFilter: "blur(6px)" }}
             onClick={onClose}
           />
-
           <motion.div
             key="rag-container"
             layoutId="rag-orb"
@@ -56,16 +58,15 @@ export default function BubbleRagOverlay({
                 "radial-gradient(circle at 60% 65%, rgba(0,255,200,.20), transparent 40%)," +
                 "radial-gradient(circle at 50% 50%, rgba(16,255,120,.14), rgba(0,0,0,0) 60%)," +
                 "color-mix(in oklab, var(--brand, #10ff78) 3%, var(--card, #0f1417))",
-              borderColor:
-                "color-mix(in oklab, var(--ring, #10ff78) 30%, var(--border, rgba(255,255,255,.06)))",
+              borderColor: "color-mix(in oklab, var(--ring, #10ff78) 30%, var(--border, rgba(255,255,255,.06)))",
               boxShadow: "0 28px 90px rgba(0,0,0,.28)",
             }}
           >
-            <div className="orb-animated orb-layer-1" />
-            <div className="orb-animated orb-layer-2" />
-
-            <div dir="rtl" className="relative z-10 flex items-center justify-between gap-3 px-4 sm:px-6 py-3 border-b"
-                 style={{ borderColor: "var(--border)", background: "transparent", backdropFilter: "blur(4px)" }}>
+            <div
+              dir="rtl"
+              className="relative z-10 flex items-center justify-between gap-3 px-4 sm:px-6 py-3 border-b"
+              style={{ borderColor: "var(--border)", background: "transparent", backdropFilter: "blur(4px)" }}
+            >
               <div className="font-semibold">المساعد الذكي (RAG)</div>
               <button onClick={onClose} className="rounded-lg border px-3 py-1 text-sm" style={{ borderColor: "var(--border)" }}>
                 إغلاق
@@ -74,13 +75,13 @@ export default function BubbleRagOverlay({
 
             <motion.div
               key="rag-content"
-              className="relative z-10 h-[calc(100%-56px)] overflow-auto p-4 sm:p-6"
+              className="relative z-10 h[calc(100%-56px)] overflow-auto p-4 sm:p-6"
               initial={{ opacity: 0, y: 8, scale: 0.995 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 6, scale: 0.995 }}
               transition={{ type: "tween", ease: [0.25, 1, 0.5, 1], duration: 0.25 }}
             >
-              {/* ✅ forward the id to the chat */}
+              {/* ✅ forward the MRID */}
               <RagChatSection matchResultId={matchResultId} />
             </motion.div>
           </motion.div>
