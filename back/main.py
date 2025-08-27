@@ -377,6 +377,7 @@ async def project_matches(
     rows = (
         supabase.table("match_results")
         .select(
+            "id, project_id, "  
             "program_id, program_name, source_url, rank, run_at, "
             "score_rule, score_content, score_goal, score_final_raw, score_final_cal, raw_distance, "
             "subs_sector, subs_stage, subs_funding, "
@@ -407,15 +408,54 @@ def is_valid_url(url: str) -> bool:
 def target_lang_for(text: str) -> str:
     return "Arabic" if re.search(r"[\u0600-\u06FF]", text or "") else "English"
 
+# --- Business-Developer role + prompts (updated) ---
+BUSINESS_DEV_SYSTEM_ROLE = """
+You are a Business Developer AI advisor integrated with a Retrieval-Augmented Generation (RAG) system.
+You collaborate with the user to refine ideas into clear, actionable plans. You bring external knowledge
+(market trends, competitor analysis, case studies) via retrieved context only.
+
+Style:
+- Collaborative, practical, and business-oriented.
+- Balance creativity with realism; always tie suggestions to business value.
+- Ask clarifying questions when needed, but keep them focused and few.
+- Do not use emojis or emoticons.
+
+Grounding Rules:
+- Use ONLY the combined Context (URL + DB). If info is missing, say "I don't know"
+  and ask for a Match Result ID or a URL to proceed.
+"""
+
 LANGUAGE_POLICY = """LANGUAGE POLICY:
 - Write the entire answer in {target_lang} only.
 - Never use any language other than {target_lang}.
 - If the context uses other languages, translate quotes into {target_lang} and use the translation only.
 - Keep code/URLs/names as-is when necessary; but all prose must be in {target_lang}.
+- Do not use emojis or emoticons.
 """
 
+# Business-Dev structured template (no hard 6-line cap; allows depth)
 CHAT_TEMPLATE = """{language_policy}
-You are a smart, friendly assistant. Talk naturally and briefly (max 6 lines). No headings or long sections.
+{system_role}
+
+Output Format (use these exact section labels):
+Suggestion/Insight: [Your improvement idea]
+Business Value: [How this impacts growth, ROI, or positioning]
+Actionable Steps: [Numbered, concrete next steps]
+Question Back: [One precise question to refine scope]
+
+Tech Depth Policy:
+- If the user asks for technical depth or implementation, append "Tech Plan".
+- If tech_depth = true, always append "Tech Plan".
+
+Tech Plan (when included):
+- Architecture:
+- Data Model:
+- APIs/Endpoints:
+- Pseudocode / Skeleton:
+- Risks & Metrics:
+
+Runtime flags:
+- tech_depth: {tech_depth}
 
 Grounding:
 - Use ONLY the combined Context (URL + DB). If info is missing, say "I don't know" and ask for Match Result ID or a URL.
@@ -435,7 +475,8 @@ Rewrite the following response in {target_lang} only. Keep meaning identical.
 """
 
 def make_chain(template: str, llm):
-    prompt = ChatPromptTemplate.from_template("{language_policy}\n\n" + template)
+    # Template already includes {language_policy}; don't prepend it again.
+    prompt = ChatPromptTemplate.from_template(template)
     return prompt | llm
 
 def get_models(temperature: float, chat_model: str, embed_model: str):
@@ -618,6 +659,7 @@ class RagChatIn(BaseModel):
     match_result_id: str
     message: str
     idea_description: Optional[str] = None
+    tech_depth: Optional[bool] = False  # NEW: force including Tech Plan
 
 class RagSummaryIn(BaseModel):
     match_result_id: str
@@ -686,12 +728,21 @@ def rag_chat(payload: RagChatIn):
         reply = safe_invoke(chat_chain, {
             "question": text,
             "context": merged,
-            "language_policy": LANGUAGE_POLICY,
+            "language_policy": LANGUAGE_POLICY.format(target_lang=target_lang),
             "target_lang": target_lang,
+            "system_role": BUSINESS_DEV_SYSTEM_ROLE,
+            "tech_depth": "true" if (payload.tech_depth or False) else "false",
         })
         # light language enforcement
         if target_lang == "Arabic" and not re.search(r"[\u0600-\u06FF]", reply):
-            reply = safe_invoke(translator_chain, {"text": reply, "target_lang": target_lang, "language_policy": LANGUAGE_POLICY})
+            reply = safe_invoke(
+                translator_chain,
+                {
+                    "text": reply,
+                    "target_lang": target_lang,
+                    "language_policy": LANGUAGE_POLICY.format(target_lang=target_lang),
+                },
+            )
 
     STATE[mrid]["messages"].append({"role":"assistant","content":reply})
 
@@ -725,7 +776,8 @@ def rag_summary(payload: RagSummaryIn):
             chat_lines.append(f"{role}: {re.sub(r'\\n+', ' ', text)[:500]}")
     chat_log = "\n".join(chat_lines)
 
-    template = """Analyze this conversation and produce a concise bullet summary.
+    template = """{language_policy}
+Analyze this conversation and produce a concise bullet summary.
 
 ### Highlights
 - [Top 3-5 points]
@@ -743,7 +795,7 @@ CONVERSATION:
     chain = make_chain(template, chat_llm)
     summary = safe_invoke(chain, {
         "chat_log": chat_log,
-        "language_policy": LANGUAGE_POLICY,
+        "language_policy": LANGUAGE_POLICY.format(target_lang=target_lang_for(chat_log)),
         "target_lang": target_lang_for(chat_log),
     })
     try:
