@@ -208,8 +208,8 @@ def _calibrate_batch(vals: List[float], mode: str) -> List[float]:
     if mode == "relative_minmax":
         lo, hi = min(vals), max(vals)
         if abs(hi - lo) < 1e-9:
-            return [0.85 for _ in vals]
-        return [0.70 + 0.25 * ((v - lo) / (hi - lo)) for v in vals]
+            return [0.55 for _ in vals]
+        return [0.40 + 0.45 * ((v - lo) / (hi - lo)) for v in vals]
     if mode == "affine_floor":
         return [0.6 + 0.4 * _safe_01(v) for v in vals]
     if mode == "sigmoid":

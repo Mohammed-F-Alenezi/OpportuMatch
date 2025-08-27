@@ -9,8 +9,14 @@ def get_embeddings():
 
 def get_vectordb() -> Any:
     Path(PERSIST_DIR).mkdir(parents=True, exist_ok=True)
-    return Chroma(
+    db = Chroma(
         collection_name=COLLECTION,
         persist_directory=PERSIST_DIR,
         embedding_function=get_embeddings(),
     )
+    try:
+        n = db._collection.count()
+        print(f"[DEBUG] Chroma: collection='{COLLECTION}' in '{PERSIST_DIR}' has {n} docs")
+    except Exception as e:
+        print(f"[DEBUG] Chroma count failed: {e}")
+    return db

@@ -124,10 +124,16 @@ def _fallback_enrich(data: Dict[str, Any], md: str) -> Dict[str, Any]:
     # sector/stage tags: quick heuristics if missing
     if not data.get("sector_tags"):
         sec = []
-        txt = md.lower()
-        if any(k in txt for k in ["health", "الصحة", "تقنية صحية", "digital health"]): sec += ["الصحة","تقنية صحية"]
-        if any(k in txt for k in ["commerce", "تجارة", "التجارة الإلكترونية"]): sec += ["التجارة الإلكترونية"]
-        if any(k in txt for k in ["ai", "ذكاء اصطناعي"]): sec += ["ذكاء اصطناعي"]
+        low = md.lower()
+        heading = (_first_heading(md) or "").lower()
+
+        strong_health = ((("health" in low) or ("الصحة" in low)) and (("pharmacy" in low) or ("صيدليات" in low))) or ("الصحة" in heading)
+        if strong_health:
+            sec += ["الصحة","تقنية صحية"]
+        if ("التجارة الإلكترونية" in md) or (("commerce" in low) and ("delivery" in low)):
+            sec += ["التجارة الإلكترونية"]
+        if ("ذكاء اصطناعي" in md) and (("تنبؤ" in md) or ("forecast" in low)):
+            sec += ["ذكاء اصطناعي"]
         data["sector_tags"] = _dedup_keep_order(sec)
     if not data.get("stage_tags"):
         st = []
