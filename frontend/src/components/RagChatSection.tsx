@@ -8,12 +8,16 @@ import { io, Socket } from "socket.io-client";
 type Msg = { id: string; role: "user" | "ai"; content: string; citations?: string[] };
 type Mood = "idle" | "smile" | "thinking";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
-const SOCKET_URL = process.env.NEXT_PUBLIC_RASHID_SOCKET || "http://localhost:5000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
-export default function RagChatSection() {
+export default function RagChatSection({ matchResultId }: { matchResultId?: string }) {
   const [messages, setMessages] = useState<Msg[]>([
-    { id: "m1", role: "ai", content: "مرحبًا 👋 أنا راشد. صف مشروعك (القطاع/المرحلة/التمويل) وسأرشح برامج مناسبة." },
+    {
+      id: "m1",
+      role: "ai",
+      content:
+        "مرحبًا 👋 أنا راشد. صف مشروعك (القطاع/المرحلة/التمويل) وسأرشّح برامج مناسبة. سأقوم بالتهيئة تلقائيًا الآن.",
+    },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -32,16 +36,42 @@ export default function RagChatSection() {
   const allowListen = voiceEnabled && (personPresent || !socketRef.current) && !botSpeaking && !ttsBusy;
 
   // keep scroll pinned
+  const [initialized, setInitialized] = useState(false);
+  const [initInfo, setInitInfo] = useState<{ source_url?: string; chunks_indexed?: number } | null>(null);
+  const [activeMrid, setActiveMrid] = useState<string>((matchResultId ?? "").trim());
+  const didAutoInit = useRef(false);
+
+  // === Summary state ===
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [summaryText, setSummaryText] = useState<string | null>(null);
+
+  const EASE: number[] = [0.22, 1, 0.36, 1];
+
+  // Auto-scroll on new messages
   useEffect(() => {
     feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
-  // mood logic (unchanged)
+  // Face mood
   useEffect(() => {
     if (loading) setMood("thinking");
     else if (input.trim()) setMood("smile");
     else setMood("idle");
   }, [input, loading]);
+
+  // Track prop change
+  useEffect(() => {
+    setActiveMrid((matchResultId ?? "").trim());
+  }, [matchResultId]);
+
+  // Auto-init once per mount (or when MRID changes)
+  useEffect(() => {
+    const mrid = (activeMrid || "").trim();
+    if (!mrid || didAutoInit.current) return;
+    didAutoInit.current = true;
+    void initFromMatchResult(mrid, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeMrid]);
 
   // ——— Socket.IO hookup (app.py events) ———
   useEffect(() => {
@@ -93,6 +123,54 @@ export default function RagChatSection() {
     } catch {}
   }
 
+  // === Summary helpers ===
+  async function fetchSummary() {
+    const mrid = (activeMrid || "").trim();
+    if (!mrid) return;
+    const res = await fetch(`${API_BASE}/summary`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ match_result_id: mrid }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    setSummaryText(data?.summary || "");
+  }
+
+  async function toggleSummary() {
+    if (!initialized) {
+      setMessages((m) => [
+        ...m,
+        { id: crypto.randomUUID(), role: "ai", content: "ابدأ بالتهيئة أولًا (تتم تلقائيًا)…" },
+      ]);
+      return;
+    }
+    if (summaryOpen) {
+      setSummaryOpen(false);
+      return;
+    }
+    try {
+      setLoading(true);
+      await fetchSummary();
+      setSummaryOpen(true);
+    } catch (e: any) {
+      setMessages((m) => [
+        ...m,
+        { id: crypto.randomUUID(), role: "ai", content: `تعذّر التلخيص: ${e?.message || e}` },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function refreshSummaryIfOpen() {
+    if (summaryOpen) {
+      try {
+        await fetchSummary();
+      } catch {
+        /* ignore */
+      }
+    }
   // ——— Browser STT (Web Speech API) ———
   function ensureRecognizer() {
     if (recRef.current) return recRef.current;
@@ -153,6 +231,16 @@ export default function RagChatSection() {
   async function send() {
     const text = input.trim();
     if (!text || loading) return;
+
+    const mrid = (activeMrid || "").trim();
+    if (!initialized || !mrid) {
+      setMessages((m) => [
+        ...m,
+        { id: crypto.randomUUID(), role: "ai", content: "التهيئة قيد الانتظار… لحظات." },
+      ]);
+      return;
+    }
+
     const newUser: Msg = { id: crypto.randomUUID(), role: "user", content: text };
     setMessages((m) => [...m, newUser]);
     setInput("");
@@ -163,6 +251,24 @@ export default function RagChatSection() {
       socketRef.current?.emit("user_text", { text });                               // single path of truth (server will answer & TTS)
       // Or keep your REST flow to /chat — your choice:
       // const res = await fetch(`${API_BASE}/chat`, { ... })
+      const res = await fetch(`${API_BASE}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ match_result_id: mrid, message: text }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      const aiMsg: Msg = {
+        id: crypto.randomUUID(),
+        role: "ai",
+        content: data?.reply || "—",
+        citations: Array.isArray(data?.citations) ? data.citations : undefined,
+      };
+      setMessages((m) => [...m, aiMsg]);
+      await refreshSummaryIfOpen();
+    } catch (e: any) {
+      const err: Msg = { id: crypto.randomUUID(), role: "ai", content: `حصل خطأ أثناء المعالجة: ${e?.message || e}` };
+      setMessages((m) => [...m, err]);
     } finally {
       setLoading(false);
     }
@@ -344,25 +450,24 @@ export default function RagChatSection() {
                     send();
                   }
                 }}
-                placeholder="اكتب رسالتك هنا…"
-                className="flex-1 bg-transparent outline-none text-[15px] resize-none leading-7 px-3 py-2.5 custom-scroll placeholder:opacity-60"
+                placeholder={initialized ? "اكتب رسالتك هنا…" : "جاري التهيئة تلقائيًا…"}
+                disabled={!initialized}
+                className="flex-1 bg-transparent outline-none text-[15px] resize-none leading-7 px-3 py-2.5 custom-scroll placeholder:opacity-60 disabled:opacity-60"
               />
 
               <button
                 onClick={send}
-                disabled={loading}
+                disabled={loading || !initialized}
                 className="shrink-0 rounded-xl px-4 py-2.5 text-sm text-white font-medium transform-gpu disabled:opacity-60"
                 style={{ background: "var(--brand)", boxShadow: "0 0 26px rgba(27,131,84,.35)" }}
                 title="إرسال"
               >
-                <div className="flex items-center gap-1.5">
-                  إرسال <Send className="w-4 h-4" />
-                </div>
+                إرسال <Send className="w-4 h-4 inline-block" />
               </button>
             </div>
 
             <div className="mt-2 px-1 text-[11px] opacity-70">
-              تلميح: الزر يفعّل/يوقف الاستماع. سيتوقف تلقائيًا أثناء تحدّث المساعد.
+              تلميح: تتم التهيئة تلقائيًا عند فتح المحادثة. ستُفعّل الكتابة بعد اكتمالها.
             </div>
           </div>
         </div>
@@ -385,11 +490,19 @@ export default function RagChatSection() {
         }
       `}</style>
       <style jsx global>{`
-        .custom-scroll { scrollbar-width: thin; }
-        .custom-scroll::-webkit-scrollbar { height: 8px; width: 8px; }
+        .custom-scroll {
+          scrollbar-width: thin;
+        }
+        .custom-scroll::-webkit-scrollbar {
+          height: 8px;
+          width: 8px;
+        }
         .custom-scroll::-webkit-scrollbar-thumb {
+         
           background: color-mix(in oklab, var(--border) 80%, transparent);
+         
           border-radius: 999px;
+       
         }
       `}</style>
     </div>
@@ -400,22 +513,63 @@ export default function RagChatSection() {
 function ToolbarGhost({ icon, text, onClick }: { icon: React.ReactNode; text: string; onClick?: () => void }) {
   return (
     <button
+     
       onClick={onClick}
+     
       className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs hover:opacity-90"
+     
       style={{ borderColor: "var(--border)", background: "transparent" }}
+    
     >
-      {icon}{text}
+      {icon}
+      {text}
     </button>
   );
 }
+
+function ContextCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div
+      className="rounded-xl p-3"
+      style={{
+        background:
+          "linear-gradient(180deg, color-mix(in oklab, var(--card) 96%, transparent), color-mix(in oklab, var(--card) 90%, transparent))",
+        border: "1px solid var(--border)",
+        boxShadow: "0 12px 30px rgba(0,0,0,.12), inset 0 1px 0 rgba(255,255,255,.05)",
+        backdropFilter: "blur(8px)",
+      }}
+    >
+      <div className="text-xs font-semibold mb-1">{title}</div>
+      <div className="text-xs opacity-80 leading-6">{children}</div>
+    </div>
+  );
+}
+
 function RashidFace({ mood, size = 36 }: { mood: Mood; size?: number }) {
   // your current SVG face kept exactly; only mood changes via state
   return (
     <div style={{ width: size, height: size }}>
-      <motion.svg viewBox="0 0 64 64" className="block" style={{ width: "100%", height: "100%" }} initial={false}
-        animate={mood === "thinking" ? { rotate: [-2, 2, -2], transition: { duration: 1.6, repeat: Infinity, ease: "easeInOut" } } : { rotate: 0 }}>
-        <motion.circle cx="32" cy="32" r="28" fill="url(#skin)" stroke="color-mix(in oklab, var(--border) 80%, transparent)" strokeWidth="1"
-          animate={mood !== "thinking" ? { scale: [1, 1.02, 1] } : { scale: 1 }} transition={{ duration: 3, repeat: Infinity }}/>
+      <motion.svg
+        viewBox="0 0 64 64"
+        className="block"
+        style={{ width: "100%", height: "100%" }}
+        initial={false}
+        animate={
+          mood === "thinking"
+            ? { rotate: [-2, 2, -2], transition: { duration: 1.6, repeat: Infinity, ease: "easeInOut" } }
+            : { rotate: 0 }
+        }
+      >
+        <motion.circle
+          cx="32"
+          cy="32"
+          r="28"
+          fill="url(#skin)"
+          stroke="color-mix(in oklab, var(--border) 80%, transparent)"
+          strokeWidth="1"
+          animate={mood !== "thinking" ? { scale: [1, 1.02, 1] } : { scale: 1 }}
+          transition={{ duration: 3, repeat: Infinity }}
+        />
         <g fill="currentColor">
           {mood === "smile" ? (
             <>
@@ -435,11 +589,15 @@ function RashidFace({ mood, size = 36 }: { mood: Mood; size?: number }) {
           <>
             <path d="M24 42 q8 -6 16 0" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
             <motion.circle cx="50" cy="14" r="2" fill="currentColor" animate={{ opacity: [0.2, 1, 0.2] }} transition={{ duration: 1.2, repeat: Infinity }} />
-            <motion.circle cx="55" cy="9" r="1.6" fill="currentColor" animate={{ opacity: [0.2, 1, 0.2] }}
-              transition={{ duration: 1.2, repeat: Infinity, delay: 0.15 }} />
+            <motion.circle cx="55" cy="9" r="1.6" fill="currentColor" animate={{ opacity: [0.2, 1, 0.2] }} transition={{ duration: 1.2, repeat: Infinity, delay: 0.15 }} />
           </>
         )}
-        {mood === "smile" && (<><circle cx="18" cy="36" r="3.5" fill="rgba(255,120,120,.25)" /><circle cx="46" cy="36" r="3.5" fill="rgba(255,120,120,.25)" /></>)}
+        {mood === "smile" && (
+          <>
+            <circle cx="18" cy="36" r="3.5" fill="rgba(255,120,120,.25)" />
+            <circle cx="46" cy="36" r="3.5" fill="rgba(255,120,120,.25)" />
+          </>
+        )}
         <defs>
           <radialGradient id="skin" cx="50%" cy="40%" r="60%">
             <stop offset="0%" stopColor="color-mix(in oklab, var(--card) 98%, transparent)" />
@@ -453,11 +611,36 @@ function RashidFace({ mood, size = 36 }: { mood: Mood; size?: number }) {
 function Dots() {
   return (
     <div className="flex items-center gap-1">
-      <span className="dot" /><span className="dot" /><span className="dot" />
+      <span className="dot" />
+      <span className="dot" />
+      <span className="dot" />
       <style jsx>{`
-        .dot{ width:6px;height:6px;border-radius:50%;display:inline-block;background:color-mix(in oklab,var(--foreground) 80%,transparent);opacity:.6;animation:pulseDot 1.2s infinite ease-in-out}
-        .dot:nth-child(2){animation-delay:.15s}.dot:nth-child(3){animation-delay:.3s}
-        @keyframes pulseDot{0%,100%{transform:translateY(0);opacity:.4}50%{transform:translateY(-3px);opacity:.9}}
+        .dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          display: inline-block;
+          background: color-mix(in oklab, var(--foreground) 80%, transparent);
+          opacity: 0.6;
+          animation: pulseDot 1.2s infinite ease-in-out;
+        }
+        .dot:nth-child(2) {
+          animation-delay: 0.15s;
+        }
+        .dot:nth-child(3) {
+          animation-delay: 0.3s;
+        }
+        @keyframes pulseDot {
+          0%,
+          100% {
+            transform: translateY(0);
+            opacity: 0.4;
+          }
+          50% {
+            transform: translateY(-3px);
+            opacity: 0.9;
+          }
+        }
       `}</style>
     </div>
   );
