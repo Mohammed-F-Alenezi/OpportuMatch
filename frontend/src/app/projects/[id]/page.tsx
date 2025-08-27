@@ -16,6 +16,7 @@ type Project = {
 };
 
 type Match = {
+  id?: string | null;                   // ✅ make optional to avoid TS issues if API doesn’t return it
   program_id?: string | null;
   program_name?: string | null;
   source_url?: string | null;
@@ -37,6 +38,9 @@ type Match = {
   improvements?: any;
   evidence_project?: any;
   evidence_program?: any;
+
+  // some backends expose this instead of `id`
+  match_result_id?: string | null;
 };
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
@@ -132,6 +136,12 @@ export default function Page() {
     [matches, activeIdx]
   );
 
+  // ✅ Pick the correct id to pass into the overlay (works if API returns `id` or `match_result_id`)
+  const activeMatchResultId = useMemo(() => {
+    const val = (active as any)?.id ?? (active as any)?.match_result_id;
+    return val != null && String(val).trim() ? String(val) : undefined;
+  }, [active]);
+
   if (loading) {
     return (
       <main className="mx-auto max-w-7xl px-4 py-8" style={{ color: "var(--foreground)" }}>
@@ -201,10 +211,8 @@ export default function Page() {
                     style={{
                       width: 160,
                       height: 160,
-                      background:
-                        "color-mix(in oklab, var(--card) 70%, var(--background))",
-                      borderColor:
-                        "color-mix(in oklab, var(--border) 70%, transparent)",
+                      background: "color-mix(in oklab, var(--card) 70%, var(--background))",
+                      borderColor: "color-mix(in oklab, var(--border) 70%, transparent)",
                       opacity: 0.35,
                     }}
                   />
@@ -230,7 +238,11 @@ export default function Page() {
       </main>
 
       {/* Full-page takeover overlay controlled here */}
-      <BubbleRagOverlay open={ragOpen} onClose={() => setRagOpen(false)} />
+      <BubbleRagOverlay
+        open={ragOpen}
+        onClose={() => setRagOpen(false)}
+        matchResultId={activeMatchResultId}    // ✅ pass the id
+      />
     </LayoutGroup>
   );
 }
@@ -277,6 +289,44 @@ function BigMatchCard({
   project: Project;
   onChat: () => void;
 }) {
+  // ✅ Log all data whenever the active big card changes
+  useEffect(() => {
+    if (!m) return;
+    try {
+      console.groupCollapsed("%cBigMatchCard changed", "color:#10b981;font-weight:600");
+      console.log("match.id:", m.id ?? m.match_result_id ?? "(none)");
+      console.log("program_id:", m.program_id);
+      console.log("program_name:", m.program_name);
+      console.log("source_url:", m.source_url);
+      console.log("rank:", m.rank, "run_at:", m.run_at);
+
+      console.log("scores:", {
+        score_rule: m.score_rule,
+        score_content: m.score_content,
+        score_goal: m.score_goal,
+        score_final_raw: m.score_final_raw,
+        score_final_cal: m.score_final_cal,
+        raw_distance: m.raw_distance,
+      });
+
+      console.log("subs:", {
+        subs_sector: m.subs_sector,
+        subs_stage: m.subs_stage,
+        subs_funding: m.subs_funding,
+      });
+
+      console.log("reasons:", m.reasons);
+      console.log("improvements:", m.improvements);
+      console.log("evidence_project:", m.evidence_project);
+      console.log("evidence_program:", m.evidence_program);
+
+      console.log("project:", project);
+      console.groupEnd();
+    } catch {
+      console.log("BigMatchCard changed:", { match: m, project });
+    }
+  }, [m, project]);
+
   const score = pickScore(m);
   const reasons = toLines(m.reasons);
   const improvements = toLines(m.improvements);
@@ -333,7 +383,6 @@ function BigMatchCard({
             <div className="text-xs mt-0.5" style={{ color: "var(--subtext-light)" }}>
               الترتيب {m.rank != null ? `#${m.rank}` : "—"} · آخر تشغيل:{" "}
               {m.run_at ? new Date(m.run_at).toLocaleString("ar-SA") : "—"}
-
               {m.source_url && (
                 <a
                   href={m.source_url}
