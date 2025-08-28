@@ -29,6 +29,10 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.documents import Document
 from langchain_community.vectorstores import InMemoryVectorStore
 from langchain_community.document_loaders import SeleniumURLLoader
+#model eda
+from routers import eda
+
+
 # Optional raw Selenium fallback
 try:
     from selenium import webdriver
@@ -62,6 +66,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(eda.router)
 
 @app.get("/health")
 def health():
@@ -844,3 +849,5 @@ def _compat_summary(payload: RagSummaryIn):
 @app.post("/test-supabase")
 def _compat_test(payload: RagTestIn):
     return rag_test(payload)
+
+

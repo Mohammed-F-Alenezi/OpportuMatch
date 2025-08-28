@@ -50,6 +50,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <head>
         <NoFlashScript />
+        <link
+       rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/d3plus@2/build/d3plus.css"
+       />
+       <link
+        rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/d3plus-geomap@2/build/d3plus-geomap.css"
+        />
+
       </head>
       <body
         className="min-h-screen bg-background text-foreground"

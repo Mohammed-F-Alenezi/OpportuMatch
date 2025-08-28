@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
+import { BarChart3 } from "lucide-react";
 import HeroOrbCTA from "@/components/HeroOrbCTA";
 import BubbleRagOverlay from "@/components/BubbleRagOverlay";
 
@@ -16,7 +18,7 @@ type Project = {
 };
 
 type Match = {
-  id?: string | null;                   // ✅ make optional to avoid TS issues if API doesn’t return it
+  id?: string | null;
   program_id?: string | null;
   program_name?: string | null;
   source_url?: string | null;
@@ -136,7 +138,7 @@ export default function Page() {
     [matches, activeIdx]
   );
 
-  // ✅ Pick the correct id to pass into the overlay (works if API returns `id` or `match_result_id`)
+  // Pick the correct id to pass into the overlay
   const activeMatchResultId = useMemo(() => {
     const val = (active as any)?.id ?? (active as any)?.match_result_id;
     return val != null && String(val).trim() ? String(val) : undefined;
@@ -145,20 +147,20 @@ export default function Page() {
   if (loading) {
     return (
       <main className="mx-auto max-w-7xl px-4 py-8" style={{ color: "var(--foreground)" }}>
-        جارِ التحميل…
+        Loading…
       </main>
     );
   }
   if (err || !project) {
     return (
       <main className="mx-auto max-w-7xl px-4 py-8" style={{ color: "var(--foreground)" }}>
-        <p className="mb-4">حدث خطأ: {err || "لم يتم العثور على المشروع"}</p>
+        <p className="mb-4">Error: {err || "Project not found"}</p>
         <button
           onClick={() => router.push("/projects/select")}
           className="underline"
           style={{ color: "var(--brand)" }}
         >
-          الرجوع لقائمة المشاريع
+          Back to projects
         </button>
       </main>
     );
@@ -167,14 +169,14 @@ export default function Page() {
   if (!matches.length) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-12 text-center" style={{ color: "var(--foreground)" }}>
-        <div className="text-lg font-semibold mb-2">لا توجد توصيات بعد</div>
-        <p className="opacity-80 mb-4">أكمل بيانات مشروعك ثم أعد تشغيل المطابقة.</p>
+        <div className="text-lg font-semibold mb-2">No recommendations yet</div>
+        <p className="opacity-80 mb-4">Complete your project details, then re-run matching.</p>
         <button
           onClick={() => router.push("/projects/select")}
           className="rounded-xl px-4 py-2 text-sm"
           style={{ background: "var(--brand)", color: "white" }}
         >
-          الرجوع لقائمة المشاريع
+          Back to projects
         </button>
       </main>
     );
@@ -187,7 +189,23 @@ export default function Page() {
         className="mx-auto max-w-7xl px-4 py-6 md:py-8"
         style={{ color: "var(--foreground)" }}
       >
-        <div className="mb-4 pr-2 text-lg md:text-xl font-semibold">{project.name}</div>
+        {/* Top bar: Project title + EDA button */}
+        <div className="mb-4 pr-2 flex items-center justify-between gap-3">
+          <div className="text-lg md:text-xl font-semibold truncate">{project.name}</div>
+          <Link
+            href={`/EDA?project=${project.id}`}
+            className="group inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm"
+            style={{
+              borderColor: "var(--border)",
+              background: "color-mix(in oklab, var(--foreground) 6%, transparent)",
+              color: "var(--foreground)",
+            }}
+            title="Open EDA Dashboard"
+          >
+            <BarChart3 className="h-4 w-4" aria-hidden />
+            <span className="font-medium">EDA Dashboard</span>
+          </Link>
+        </div>
 
         <div dir="ltr" className="grid md:grid-cols-3 gap-6 items-stretch">
           {/* LEFT: 2×2 */}
@@ -241,7 +259,7 @@ export default function Page() {
       <BubbleRagOverlay
         open={ragOpen}
         onClose={() => setRagOpen(false)}
-        matchResultId={activeMatchResultId}    // ✅ pass the id
+        matchResultId={activeMatchResultId}
       />
     </LayoutGroup>
   );
@@ -289,7 +307,6 @@ function BigMatchCard({
   project: Project;
   onChat: () => void;
 }) {
-  // ✅ Log all data whenever the active big card changes
   useEffect(() => {
     if (!m) return;
     try {
