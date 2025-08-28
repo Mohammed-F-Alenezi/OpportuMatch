@@ -1,6 +1,9 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+.d3plus-geomap-ocean { fill: transparent; }
+.dark .d3plus-geomap-ocean { fill: transparent; }
+
 
 /* Light by default */
 /* :root {

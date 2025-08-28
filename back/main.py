@@ -503,4 +503,291 @@ async def _on_shutdown():
     try:
         log.info("Shutting down application.")
     except Exception as e:
-        log.error("Shutdown hook error:\n%s", _exc_str(e))
+        log.error(f"retrieve_context failed: {e}")
+        return ""
+
+def safe_invoke(runnable, inputs: dict, max_retries: int = 3) -> str:
+    last_err = None
+    for i in range(max_retries):
+        try:
+            out = runnable.invoke(inputs)
+            return out.content.strip() if hasattr(out, "content") else str(out).strip()
+        except Exception as e:
+            last_err = e
+            log.warning(f"invoke attempt {i+1} failed: {e}")
+    return f"Error: Could not generate response. Details: {last_err}"
+
+# --- DB helpers for RAG ---
+def fetch_chat_bundle(match_result_id: str) -> Dict[str, Any]:
+    out = {"improvement": None, "reason": None, "project_id": None, "description": "", "source_url": ""}
+    try:
+        mr = supabase.table("match_results").select("*").eq("id", match_result_id).limit(1).execute()
+        row = (mr.data or [None])[0]
+        if not row:
+            return out
+
+        improvement = row.get("improvements") if row.get("improvements") is not None else row.get("improveness")
+        reason      = row.get("reasons") if row.get("reasons") is not None else row.get("reason")
+        source_url  = (row.get("source_url") or row.get("sourse_url") or "").strip()
+
+        out.update({
+            "improvement": improvement,
+            "reason": reason,
+            "project_id": row.get("project_id"),
+            "source_url": source_url
+        })
+
+        if out["project_id"]:
+            proj = supabase.table("projects").select("description").eq("id", out["project_id"]).limit(1).execute()
+            prow = (proj.data or [None])[0]
+            if prow and prow.get("description"): out["description"] = prow["description"]
+        return out
+    except Exception as e:
+        log.error(f"fetch_chat_bundle failed: {e}")
+        return out
+
+def upsert_chatbot_seed(match_result_id: str, bundle: dict, idea_description_from_ui: str = "") -> dict:
+    try:
+        mrid = (match_result_id or "").strip()
+        if not mrid:
+            return {"ok": False, "error": "Empty match_result_id"}
+
+        payload = {"match_result_id": mrid}
+        pid  = (bundle or {}).get("project_id")
+        src  = ((bundle or {}).get("source_url") or "").strip()
+        idea = (idea_description_from_ui or (bundle or {}).get("description") or "").strip()
+        if pid:  payload["project_id"] = pid
+        if src:  payload["source_url"] = src
+        if idea: payload["idea_description"] = idea
+
+        if len(payload) == 1:
+            return {"ok": False, "error": "No non-empty fields to seed", "written": payload}
+
+        supabase.table("chatbot").upsert(payload, on_conflict="match_result_id").execute()
+        return {"ok": True, "written": payload}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "written": {}}
+
+def save_chat_turn(mrid: str, role: str, content: str, bundle: dict):
+    try:
+        row = supabase.table("chatbot").select("convo").eq("match_result_id", mrid).limit(1).execute()
+        row = (row.data or [None])[0]
+        convo = row.get("convo") if row else []
+        if not isinstance(convo, list): convo = []
+        convo.append({"role": role, "content": content})
+        payload = {
+            "match_result_id": mrid,
+            "convo": convo,
+        }
+        if role == "assistant":
+            payload["last_reply"] = content
+        pid  = (bundle or {}).get("project_id")
+        idea = (bundle or {}).get("description", "")
+        src  = (bundle or {}).get("source_url", "")
+        if pid:  payload["project_id"] = pid
+        if idea: payload["idea_description"] = idea
+        if src:  payload["source_url"] = src
+        supabase.table("chatbot").upsert(payload, on_conflict="match_result_id").execute()
+    except Exception as e:
+        log.warning(f"save_chat_turn failed: {e}")
+
+def save_summary(mrid: str, summary_md: str):
+    try:
+        supabase.table("chatbot").update({"summary": summary_md}).eq("match_result_id", mrid).execute()
+    except Exception as e:
+        log.warning(f"save_summary failed: {e}")
+
+# ---------- RAG Schemas ----------
+class RagInitIn(BaseModel):
+    match_result_id: str
+    idea_description: Optional[str] = None
+
+class RagChatIn(BaseModel):
+    match_result_id: str
+    message: str
+    idea_description: Optional[str] = None
+    tech_depth: Optional[bool] = False  # NEW: force including Tech Plan
+
+class RagSummaryIn(BaseModel):
+    match_result_id: str
+
+class RagTestIn(BaseModel):
+    match_result_id: Optional[str] = None
+    write: bool = False
+
+# ---------- RAG Endpoints (canonical under /rag/*) ----------
+@app.post("/rag/init")
+def rag_init(payload: RagInitIn):
+    mrid = payload.match_result_id.strip()
+    if not mrid:
+        raise HTTPException(400, "match_result_id required")
+    ensure_defaults(mrid)
+
+    bundle = fetch_chat_bundle(mrid)
+    STATE[mrid]["db_bundle"] = bundle
+
+    seed_res = upsert_chatbot_seed(mrid, bundle, payload.idea_description or "")
+
+    chunks = 0
+    src_url = (bundle.get("source_url") or "").strip()
+    if src_url:
+        ensure_vectorstore_for(mrid)
+        try:
+            chunks = load_and_index_url(mrid, src_url)
+        except Exception as e:
+            log.warning(f"load url failed: {e}")
+
+    return {"ok": True, "seeded": seed_res, "source_url": src_url, "chunks_indexed": chunks, "bundle": bundle}
+
+@app.post("/rag/chat")
+def rag_chat(payload: RagChatIn):
+    mrid = payload.match_result_id.strip()
+    text = (payload.message or "").strip()
+    if not mrid or not text:
+        raise HTTPException(400, "match_result_id and message required")
+    ensure_defaults(mrid)
+
+    chat_llm, _ = get_models(STATE[mrid]["temperature"], STATE[mrid]["chat_model"], STATE[mrid]["embed_model"])
+    chat_chain       = make_chain(CHAT_TEMPLATE, chat_llm)
+    translator_chain = make_chain(TRANSLATE_TEMPLATE, chat_llm)
+
+    web_ctx = retrieve_context(mrid, text, k=6) if STATE[mrid].get("doc_count", 0) > 0 else ""
+    dbb     = STATE[mrid].get("db_bundle") or {}
+
+    def build_db_context(b: Dict[str, Any], user_desc: str) -> str:
+        parts = []
+        desc = (user_desc or "").strip() or (b.get("description") or "").strip()
+        if desc: parts.append(f"PROJECT_DESCRIPTION:\n{desc}")
+        if b.get("improvement"): parts.append("IMPROVEMENT_JSONB:\n" + json.dumps(b.get("improvement"), ensure_ascii=False)[:1200])
+        if b.get("reason"):      parts.append("REASON_JSONB:\n" + json.dumps(b.get("reason"), ensure_ascii=False)[:1200])
+        return "\n\n".join(parts)
+
+    db_ctx = build_db_context(dbb, payload.idea_description or "")
+    merged = "\n\n".join([p for p in [("[WEB_CONTEXT]\n"+web_ctx) if web_ctx else "", ("[DB_CONTEXT]\n"+db_ctx) if db_ctx else ""] if p])
+
+    target_lang = target_lang_for(text)
+    STATE[mrid]["messages"].append({"role":"user","content":text})
+
+    if not merged.strip():
+        reply = "ما عندي سياق — ابدأ من Match Result أولاً." if target_lang=="Arabic" \
+                else "I don't know—no context loaded. Initialize from Match Result first."
+    else:
+        reply = safe_invoke(chat_chain, {
+            "question": text,
+            "context": merged,
+            "language_policy": LANGUAGE_POLICY.format(target_lang=target_lang),
+            "target_lang": target_lang,
+            "system_role": BUSINESS_DEV_SYSTEM_ROLE,
+            "tech_depth": "true" if (payload.tech_depth or False) else "false",
+        })
+        # light language enforcement
+        if target_lang == "Arabic" and not re.search(r"[\u0600-\u06FF]", reply):
+            reply = safe_invoke(
+                translator_chain,
+                {
+                    "text": reply,
+                    "target_lang": target_lang,
+                    "language_policy": LANGUAGE_POLICY.format(target_lang=target_lang),
+                },
+            )
+
+    STATE[mrid]["messages"].append({"role":"assistant","content":reply})
+
+    try:
+        save_chat_turn(mrid, "user", text, dbb)
+        save_chat_turn(mrid, "assistant", reply, dbb)
+    except Exception as e:
+        log.warning(f"persist chat failed: {e}")
+
+    citations: List[str] = []
+    if STATE[mrid].get("current_url"): citations.append(STATE[mrid]["current_url"])
+    if dbb.get("improvement"): citations.append("DB: improvements")
+    if dbb.get("reason"):      citations.append("DB: reasons")
+
+    return {"reply": reply, "citations": citations}
+
+@app.post("/rag/summary")
+def rag_summary(payload: RagSummaryIn):
+    mrid = payload.match_result_id.strip()
+    if not mrid:
+        raise HTTPException(400, "match_result_id required")
+    ensure_defaults(mrid)
+
+    chat_llm, _ = get_models(0.2, STATE[mrid]["chat_model"], STATE[mrid]["embed_model"])
+    # compact recent messages for summary
+    chat_lines = []
+    for m in STATE[mrid]["messages"][-20:]:
+        role = m.get("role","user")
+        text = (m.get("content") or "").strip()
+        if text:
+            chat_lines.append(f"{role}: {re.sub(r'\\n+', ' ', text)[:500]}")
+    chat_log = "\n".join(chat_lines)
+
+    template = """{language_policy}
+Analyze this conversation and produce a concise bullet summary.
+
+### Highlights
+- [Top 3-5 points]
+
+### Decisions
+- [Up to 3 decisions or "None"]
+
+### Next Steps
+- [3-5 short action bullets]
+
+---
+CONVERSATION:
+{chat_log}
+"""
+    chain = make_chain(template, chat_llm)
+    summary = safe_invoke(chain, {
+        "chat_log": chat_log,
+        "language_policy": LANGUAGE_POLICY.format(target_lang=target_lang_for(chat_log)),
+        "target_lang": target_lang_for(chat_log),
+    })
+    try:
+        save_summary(mrid, summary)
+    except Exception as e:
+        log.warning(f"save summary failed: {e}")
+
+    return {"summary": summary}
+
+@app.post("/rag/test-supabase")
+def rag_test(payload: RagTestIn):
+    res = {"connected": True, "errors": []}
+    try:
+        any_mr = supabase.table("match_results").select("id").limit(1).execute()
+        res["read_any_match_results"] = bool(any_mr.data)
+        if payload.match_result_id:
+            mr = supabase.table("match_results").select("*").eq("id", payload.match_result_id.strip()).limit(1).execute()
+            row = (mr.data or [None])[0]
+            res["read_specific_match_result"] = bool(row)
+            if row and row.get("project_id"):
+                pr = supabase.table("projects").select("description").eq("id", row["project_id"]).limit(1).execute()
+                prow = (pr.data or [None])[0]
+                res["read_project_description"] = bool(prow and (prow.get("description") is not None))
+        if payload.write and payload.match_result_id:
+            b = fetch_chat_bundle(payload.match_result_id.strip())
+            upsert_chatbot_seed(payload.match_result_id.strip(), b, b.get("description",""))
+            res["write_chatbot"] = True
+    except Exception as e:
+        res["connected"] = False
+        res["errors"].append(str(e))
+    return res
+
+# ---------- Back-compat shims (so old frontend calling /init, /chat, /summary still works) ----------
+@app.post("/init")
+def _compat_init(payload: RagInitIn):
+    return rag_init(payload)
+
+@app.post("/chat")
+def _compat_chat(payload: RagChatIn):
+    return rag_chat(payload)
+
+@app.post("/summary")
+def _compat_summary(payload: RagSummaryIn):
+    return rag_summary(payload)
+
+@app.post("/test-supabase")
+def _compat_test(payload: RagTestIn):
+    return rag_test(payload)
