@@ -40,9 +40,6 @@ type Match = {
   improvements?: any;
   evidence_project?: any;
   evidence_program?: any;
-
-  // some backends expose this instead of `id`
-  match_result_id?: string | null;
 };
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
@@ -137,12 +134,12 @@ export default function Page() {
     () => matches.filter((_, i) => i !== activeIdx).slice(0, 4),
     [matches, activeIdx]
   );
-
-  // Pick the correct id to pass into the overlay
-  const activeMatchResultId = useMemo(() => {
-    const val = (active as any)?.id ?? (active as any)?.match_result_id;
-    return val != null && String(val).trim() ? String(val) : undefined;
-  }, [active]);
+const activeMatchResultId = useMemo(() => {
+  if (!active) return undefined;
+  // Prefer row id; fall back to any alias your API returns
+  const rid = (active as any).id ?? (active as any).match_result_id;
+  return rid != null && String(rid).trim() ? String(rid) : undefined;
+}, [active]);
 
   if (loading) {
     return (
@@ -229,8 +226,10 @@ export default function Page() {
                     style={{
                       width: 160,
                       height: 160,
-                      background: "color-mix(in oklab, var(--card) 70%, var(--background))",
-                      borderColor: "color-mix(in oklab, var(--border) 70%, transparent)",
+                      background:
+                        "color-mix(in oklab, var(--card) 70%, var(--background))",
+                      borderColor:
+                        "color-mix(in oklab, var(--border) 70%, transparent)",
                       opacity: 0.35,
                     }}
                   />
@@ -256,11 +255,11 @@ export default function Page() {
       </main>
 
       {/* Full-page takeover overlay controlled here */}
-      <BubbleRagOverlay
-        open={ragOpen}
-        onClose={() => setRagOpen(false)}
-        matchResultId={activeMatchResultId}
-      />
+<BubbleRagOverlay
+  open={ragOpen}
+  onClose={() => setRagOpen(false)}
+  matchResultId={activeMatchResultId}   
+/>
     </LayoutGroup>
   );
 }
@@ -307,11 +306,15 @@ function BigMatchCard({
   project: Project;
   onChat: () => void;
 }) {
+  // ✅ Log all data whenever the active big card changes
   useEffect(() => {
     if (!m) return;
     try {
-      console.groupCollapsed("%cBigMatchCard changed", "color:#10b981;font-weight:600");
-      console.log("match.id:", m.id ?? m.match_result_id ?? "(none)");
+      console.groupCollapsed(
+        "%cBigMatchCard changed",
+        "color:#10b981;font-weight:600"
+      );
+      console.log("match.id:", m.id);
       console.log("program_id:", m.program_id);
       console.log("program_name:", m.program_name);
       console.log("source_url:", m.source_url);
@@ -340,6 +343,7 @@ function BigMatchCard({
       console.log("project:", project);
       console.groupEnd();
     } catch {
+      // Fallback single log
       console.log("BigMatchCard changed:", { match: m, project });
     }
   }, [m, project]);
@@ -400,6 +404,7 @@ function BigMatchCard({
             <div className="text-xs mt-0.5" style={{ color: "var(--subtext-light)" }}>
               الترتيب {m.rank != null ? `#${m.rank}` : "—"} · آخر تشغيل:{" "}
               {m.run_at ? new Date(m.run_at).toLocaleString("ar-SA") : "—"}
+
               {m.source_url && (
                 <a
                   href={m.source_url}
