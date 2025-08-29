@@ -132,12 +132,12 @@ export default function Page() {
     () => matches.filter((_, i) => i !== activeIdx).slice(0, 4),
     [matches, activeIdx]
   );
-
-  const activeMatchResultId = useMemo(() => {
-    if (!active) return undefined;
-    const rid = (active as any).id ?? (active as any).match_result_id;
-    return rid != null && String(rid).trim() ? String(rid) : undefined;
-  }, [active]);
+const activeMatchResultId = useMemo(() => {
+  if (!active) return undefined;
+  // Prefer row id; fall back to any alias your API returns
+  const rid = (active as any).id ?? (active as any).match_result_id;
+  return rid != null && String(rid).trim() ? String(rid) : undefined;
+}, [active]);
 
   if (loading) {
     return (
@@ -236,13 +236,13 @@ export default function Page() {
         </div>
       </main>
 
-      {/* ✅ Full-page takeover overlay controlled here; pass projectId */}
-      <BubbleRagOverlay
-        open={ragOpen}
-        onClose={() => setRagOpen(false)}
-        matchResultId={activeMatchResultId}
-        projectId={project.id}      // ✅ NEW: pass the project id
-      />
+      {/* Full-page takeover overlay controlled here */}
+<BubbleRagOverlay
+  open={ragOpen}
+  onClose={() => setRagOpen(false)}
+  matchResultId={activeMatchResultId}   
+  projectId={project?.id ?? undefined}
+/>
     </LayoutGroup>
   );
 }
@@ -289,10 +289,13 @@ function BigMatchCard({
   project: Project;
   onChat: () => void;
 }) {
-  useEffect(() => {
+    useEffect(() => {
     if (!m) return;
     try {
-      console.groupCollapsed("%cBigMatchCard changed", "color:#10b981;font-weight:600");
+      console.groupCollapsed(
+        "%cBigMatchCard changed",
+        "color:#10b981;font-weight:600"
+      );
       console.log("match.id:", m.id);
       console.log("program_id:", m.program_id);
       console.log("program_name:", m.program_name);
@@ -322,6 +325,7 @@ function BigMatchCard({
       console.log("project:", project);
       console.groupEnd();
     } catch {
+      // Fallback single log
       console.log("BigMatchCard changed:", { match: m, project });
     }
   }, [m, project]);

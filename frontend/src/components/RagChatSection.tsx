@@ -4,6 +4,7 @@ import type { Socket } from "socket.io-client";
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Bot, Send, Copy, RefreshCcw } from "lucide-react";
+import MarkdownBubble from "@/components/MarkdownBubble";
 
 type Msg = { id: string; role: "user" | "ai"; content: string; citations?: string[] };
 type Mood = "idle" | "smile" | "thinking";
@@ -372,7 +373,9 @@ export default function RagChatSection({
                 }}
               >
                 <div className="mb-1 text-xs opacity-80">{m.role === "ai" ? "المساعد" : "أنت"}</div>
-                <div style={{ maxWidth: "68ch" }}>{m.content}</div>
+
+                {/* ✅ Markdown-enabled renderer */}
+                <MarkdownBubble text={m.content} rtl />
 
                 {!!m.citations?.length && (
                   <div className="mt-2 flex flex-wrap gap-2">
@@ -661,22 +664,11 @@ function Dots() {
           opacity: 0.6;
           animation: pulseDot 1.2s infinite ease-in-out;
         }
-        .dot:nth-child(2) {
-          animation-delay: 0.15s;
-        }
-        .dot:nth-child(3) {
-          animation-delay: 0.3s;
-        }
+        .dot:nth-child(2) { animation-delay: 0.15s; }
+        .dot:nth-child(3) { animation-delay: 0.3s; }
         @keyframes pulseDot {
-          0%,
-          100% {
-            transform: translateY(0);
-            opacity: 0.4;
-          }
-          50% {
-            transform: translateY(-3px);
-            opacity: 0.9;
-          }
+          0%, 100% { transform: translateY(0); opacity: 0.4; }
+          50% { transform: translateY(-3px); opacity: 0.9; }
         }
       `}</style>
     </div>
