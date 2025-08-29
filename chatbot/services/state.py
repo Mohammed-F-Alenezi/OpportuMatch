@@ -1,4 +1,3 @@
-# chatbot/services/state.py
 import json, re, logging
 from typing import Dict, Any, List
 from langchain_core.documents import Document
@@ -11,7 +10,9 @@ from chatbot.config import get_models, default_chat_model, default_embed_model, 
 log = logging.getLogger(__name__)
 
 STATE: Dict[str, Dict[str, Any]] = {}
-# STATE[mrid] keys: vectorstore, embed_model, chat_model, temperature, doc_count, current_url, db_bundle, messages
+# STATE[mrid] keys:
+#  vectorstore, embed_model, chat_model, temperature, doc_count, current_url,
+#  db_bundle, messages, anchors (list[{"id": "PT-1", "title": "...", "body": "..."}])
 
 def target_lang_for(text: str) -> str:
     return "Arabic" if re.search(r"[\u0600-\u06FF]", text or "") else "English"
@@ -21,13 +22,15 @@ def make_chain(template: str, llm):
 
 def ensure_defaults(mrid: str):
     if mrid not in STATE: STATE[mrid] = {}
-    STATE[mrid].setdefault("chat_model", default_chat_model())
-    STATE[mrid].setdefault("embed_model", default_embed_model())
-    STATE[mrid].setdefault("temperature", default_temperature())
-    STATE[mrid].setdefault("messages", [])
-    STATE[mrid].setdefault("doc_count", 0)
-    STATE[mrid].setdefault("current_url", "")
-    STATE[mrid].setdefault("db_bundle", {})
+    S = STATE[mrid]
+    S.setdefault("chat_model", default_chat_model())
+    S.setdefault("embed_model", default_embed_model())
+    S.setdefault("temperature", default_temperature())
+    S.setdefault("messages", [])
+    S.setdefault("doc_count", 0)
+    S.setdefault("current_url", "")
+    S.setdefault("db_bundle", {})
+    S.setdefault("anchors", [])  # <= NEW
 
 def ensure_vectorstore_for(mrid: str):
     want = STATE[mrid]["embed_model"]
@@ -70,3 +73,49 @@ def safe_invoke(runnable, inputs: dict, max_retries: int = 3) -> str:
             last_err = e
             log.warning(f"invoke attempt {i+1} failed: {e}")
     return f"Error: Could not generate response. Details: {last_err}"
+
+# ---------- NEW: PT anchor helpers ----------
+_PT_LINE = re.compile(r'^\s*(PT-\d+)\s*:\s*(.+?)\s*$', re.IGNORECASE)
+
+def extract_pt_anchors(text: str) -> List[dict]:
+    """
+    Extracts lines like 'PT-3: Title' and grabs an optional short body block
+    under each (up to a blank line). Robust to bullets.
+    """
+    if not text: return []
+    lines = text.splitlines()
+    anchors = []
+    i = 0
+    while i < len(lines):
+        m = _PT_LINE.match(lines[i])
+        if m:
+            pt_id, title = m.group(1).upper(), m.group(2).strip()
+            body_lines = []
+            i += 1
+            while i < len(lines) and lines[i].strip() and not _PT_LINE.match(lines[i]):
+                body_lines.append(lines[i])
+                i += 1
+            anchors.append({"id": pt_id, "title": title, "body": "\n".join(body_lines).strip()})
+        else:
+            i += 1
+    return anchors
+
+def update_anchor_memory(mrid: str, reply_text: str):
+    """
+    Store/refresh the most recent anchored list this assistant produced.
+    If a reply contains PT-* anchors, we replace the memory with this new set.
+    """
+    new_anchors = extract_pt_anchors(reply_text)
+    if new_anchors:
+        STATE[mrid]["anchors"] = new_anchors
+
+def anchors_block(mrid: str) -> str:
+    """
+    Render the most recent anchors so the prompt can resolve 'point 3' etc.
+    """
+    anchors = STATE.get(mrid, {}).get("anchors") or []
+    if not anchors: return ""
+    out = ["MOST RECENT ANCHORED LIST (for follow-ups):"]
+    for a in anchors:
+        out.append(f'{a["id"]}: {a["title"]}')
+    return "\n".join(out)

@@ -1,5 +1,3 @@
-# chatbot/services/helpers.py
-
 QUERY_CLASSIFIERS = {
     "strategic": ["business model", "strategy", "market", "competitive", "positioning"],
     "technical": ["architecture", "code", "system", "database", "API", "implementation"],
@@ -17,7 +15,6 @@ def classify_query(question: str) -> str:
 
 def extract_urls_from_context(context: str) -> list[str]:
     import re
-    # allow %xx once, repeated pairs, etc.
     pattern = r'http[s]?://(?:[a-zA-Z0-9]|[$\-_.+!*\'(),]|%[0-9a-fA-F]{2})+'
     return re.findall(pattern, context or "")
 

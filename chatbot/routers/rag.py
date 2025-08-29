@@ -1,21 +1,37 @@
-
-# back/chatbot/routers/rag.py
 import json, re, logging
 from typing import Any, Dict, List
 from fastapi import APIRouter, HTTPException
 
 from chatbot.config import get_models
-from chatbot.prompts import (
-    BUSINESS_DEV_SYSTEM_ROLE,
-    LANGUAGE_POLICY,
-    ENHANCED_CHAT_TEMPLATE,
-    TECHNICAL_DEEP_DIVE_TEMPLATE,
-    TRANSLATE_TEMPLATE,
-)
+
+# --------- PROMPTS IMPORT WITH SAFE FALLBACKS ----------
+try:
+    from chatbot.prompts import (
+        BUSINESS_DEV_SYSTEM_ROLE,
+        ENHANCED_CHAT_TEMPLATE,
+        LANGUAGE_POLICY,            # may not exist in your prompts.py
+        TECHNICAL_DEEP_DIVE_TEMPLATE,  # may not exist
+        TRANSLATE_TEMPLATE,            # may not exist
+    )
+except Exception:
+    # Minimum set from your prompts.py + light fallbacks so code never breaks
+    from chatbot.prompts import BUSINESS_DEV_SYSTEM_ROLE, ENHANCED_CHAT_TEMPLATE
+    LANGUAGE_POLICY = """LANGUAGE POLICY:
+- Write the entire answer in {target_lang} only.
+- Keep code/URLs/names as-is when necessary; but all prose must be in {target_lang}.
+"""
+    TECHNICAL_DEEP_DIVE_TEMPLATE = ENHANCED_CHAT_TEMPLATE  # reuse enhanced template
+    TRANSLATE_TEMPLATE = """{language_policy}
+Translate the following text into {target_lang} with professional tone. Keep code blocks unchanged.
+
+TEXT:
+{text}
+"""
+
 from chatbot.models.schemas import RagInitIn, RagChatIn, RagSummaryIn, RagTestIn
 from chatbot.services.state import (
     STATE, ensure_defaults, ensure_vectorstore_for, retrieve_context,
-    target_lang_for, safe_invoke, make_chain
+    target_lang_for, safe_invoke, make_chain, anchors_block, update_anchor_memory
 )
 from chatbot.services.scraper import load_and_index_url
 from chatbot.services.rag_db import fetch_chat_bundle, upsert_chatbot_seed, save_chat_turn, save_summary
@@ -74,22 +90,30 @@ def rag_chat(payload: RagChatIn):
         return "\n\n".join(parts)
 
     db_ctx = build_db_context(dbb, payload.idea_description or "")
-    merged = "\n\n".join([p for p in [("[WEB_CONTEXT]\n"+web_ctx) if web_ctx else "",
-                                      ("[DB_CONTEXT]\n"+db_ctx) if db_ctx else ""] if p])
+
+    # === NEW: include the most recent anchored list to enable PT follow-ups ===
+    anchors_ctx = anchors_block(mrid)
+
+    merged = "\n\n".join([
+        ("[ANCHORS]\n"+anchors_ctx) if anchors_ctx else "",
+        ("[WEB_CONTEXT]\n"+web_ctx) if web_ctx else "",
+        ("[DB_CONTEXT]\n"+db_ctx) if db_ctx else "",
+    ]).strip()
 
     target_lang = target_lang_for(text)
     STATE[mrid]["messages"].append({"role": "user", "content": text})
 
-    if not merged.strip():
+    if not merged:
         reply = "ما عندي سياق — ابدأ من Match Result أولاً." if target_lang == "Arabic" \
                 else "I don't know—no context loaded. Initialize from Match Result first."
+        urls_list = []
     else:
         urls_list = extract_urls_from_context(merged)
         urls_str = ", ".join(urls_list) if urls_list else "None"
         query_type = classify_query(text)
         force_tech = bool(payload.tech_depth) or determine_tech_depth(text, merged)
-        template_to_use = TECHNICAL_DEEP_DIVE_TEMPLATE if force_tech else ENHANCED_CHAT_TEMPLATE
 
+        template_to_use = TECHNICAL_DEEP_DIVE_TEMPLATE if force_tech else ENHANCED_CHAT_TEMPLATE
         chat_chain       = make_chain(template_to_use, chat_llm)
         translator_chain = make_chain(TRANSLATE_TEMPLATE, chat_llm)
 
@@ -103,6 +127,8 @@ def rag_chat(payload: RagChatIn):
             "target_lang": target_lang,
             "system_role": BUSINESS_DEV_SYSTEM_ROLE,
         })
+
+        # If user asked in Arabic but model replied in English, translate once.
         if target_lang == "Arabic" and not re.search(r"[\u0600-\u06FF]", reply):
             reply = safe_invoke(
                 translator_chain,
@@ -115,6 +141,12 @@ def rag_chat(payload: RagChatIn):
 
     STATE[mrid]["messages"].append({"role": "assistant", "content": reply})
 
+    # === NEW: capture PT anchors from this reply for future turns ===
+    try:
+        update_anchor_memory(mrid, reply)
+    except Exception as e:
+        log.warning(f"update_anchor_memory failed: {e}")
+
     try:
         save_chat_turn(mrid, "user", text, dbb)
         save_chat_turn(mrid, "assistant", reply, dbb)
@@ -124,7 +156,7 @@ def rag_chat(payload: RagChatIn):
     citations: List[str] = []
     if STATE[mrid].get("current_url"):
         citations.append(STATE[mrid]["current_url"])
-    for u in urls_list:
+    for u in (urls_list or []):
         if u not in citations:
             citations.append(u)
     if dbb.get("improvement"):
@@ -142,7 +174,6 @@ def rag_summary(payload: RagSummaryIn):
     ensure_defaults(mrid)
 
     chat_llm, _ = get_models(0.2, STATE[mrid]["chat_model"], STATE[mrid]["embed_model"])
-    # compact recent messages for summary
     chat_lines = []
     for m in STATE[mrid]["messages"][-20:]:
         role = m.get("role", "user")
@@ -204,7 +235,7 @@ def rag_test(payload: RagTestIn):
         res["errors"].append(str(e))
     return res
 
-# Back-compat shims so old frontend /init, /chat, /summary still work
+# Back-compat shims
 @router.post("/init")
 def _compat_init(payload: RagInitIn):
     return rag_init(payload)
