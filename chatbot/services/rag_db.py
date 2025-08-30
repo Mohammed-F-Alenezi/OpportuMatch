@@ -1,11 +1,44 @@
-# chatbot/services/rag_db.py
 import json, logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from chatbot.db.supabase import supabase
 
 log = logging.getLogger(__name__)
 
+def _first_nonempty(d: dict, *keys) -> Optional[str]:
+    for k in keys:
+        v = d.get(k)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+        if v not in (None, "", [], {}):
+            return v
+    return None
+
+def _fetch_project_description(project_id: str) -> str:
+    """
+    Fetch project description by project_id from Projects.Description,
+    falling back to lowercase if PostgREST normalized names.
+    """
+    table_candidates = ["Projects", "projects"]
+    column_candidates = ["Description", "description"]
+
+    for t in table_candidates:
+        try:
+            res = supabase.table(t).select("Description,description").eq("id", project_id).limit(1).execute()
+            row = (res.data or [None])[0]
+            if not row:
+                continue
+            for c in column_candidates:
+                val = row.get(c)
+                if isinstance(val, str) and val.strip():
+                    return val.strip()
+        except Exception as e:
+            log.debug(f"_fetch_project_description: table {t} failed: {e}")
+    return ""
+
 def fetch_chat_bundle(match_result_id: str) -> Dict[str, Any]:
+    """
+    Normalized bundle used to build prompt context.
+    """
     out = {"improvement": None, "reason": None, "project_id": None, "description": "", "source_url": ""}
     try:
         mr = supabase.table("match_results").select("*").eq("id", match_result_id).limit(1).execute()
@@ -13,21 +46,23 @@ def fetch_chat_bundle(match_result_id: str) -> Dict[str, Any]:
         if not row:
             return out
 
-        improvement = row.get("improvements") if row.get("improvements") is not None else row.get("improveness")
-        reason      = row.get("reasons") if row.get("reasons") is not None else row.get("reason")
-        source_url  = (row.get("source_url") or row.get("sourse_url") or "").strip()
+        improvement = _first_nonempty(row, "improvements", "improveness")
+        reason      = _first_nonempty(row, "reasons", "reason")
+        source_url  = (_first_nonempty(row, "source_url", "sourse_url") or "")
+        project_id  = _first_nonempty(row, "project_id")
 
         out.update({
             "improvement": improvement,
             "reason": reason,
-            "project_id": row.get("project_id"),
-            "source_url": source_url
+            "project_id": project_id,
+            "source_url": source_url or "",
         })
 
-        if out["project_id"]:
-            proj = supabase.table("projects").select("description").eq("id", out["project_id"]).limit(1).execute()
-            prow = (proj.data or [None])[0]
-            if prow and prow.get("description"): out["description"] = prow["description"]
+        if project_id:
+            desc = _fetch_project_description(project_id)
+            if desc:
+                out["description"] = desc
+
         return out
     except Exception as e:
         log.error(f"fetch_chat_bundle failed: {e}")
