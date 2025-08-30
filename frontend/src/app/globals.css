@@ -161,3 +161,76 @@ body { font-feature-settings: "ss01" on; }
 @media (prefers-reduced-motion: reduce) {
   .orb-layer-1, .orb-layer-2 { animation: none !important; }
 }
+
+
+
+/* --- EDA: map + cards polish --- */
+.hero-choropleth {
+  box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 10px 30px rgba(0,0,0,.25);
+}
+
+/* Keep attribution visible (required), just make it elegant */
+.choropleth-clean .mapboxgl-ctrl-bottom-right,
+.choropleth-clean .mapboxgl-ctrl-bottom-left {
+  background: rgba(0,0,0,.35);
+  backdrop-filter: blur(6px);
+  border-radius: 10px;
+  padding: 2px 6px;
+}
+.choropleth-clean .mapboxgl-ctrl-attrib a { color: #cde7da; }
+
+/* Cards: subtle gradient + border harmonized with theme tokens */
+.card-soft {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--card) 92%, #0f1a14 8%),
+    color-mix(in oklab, var(--card) 98%, #0c1310 2%)
+  );
+  border: 1px solid color-mix(in oklab, var(--border-dark) 24%, rgba(255,255,255,.06) 76%);
+}
+
+/***** KPI styles *****/
+.kpi-badge {
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: color-mix(in oklab, #1B8354 16%, #0b1512 84%);
+  color: #c7f2df;
+}
+
+/* Tabs: better focus ring / hit area */
+[data-state="active"].ui-tab {
+  outline: 2px solid color-mix(in oklab, var(--brand) 65%, #f0fff9 35%);
+  outline-offset: 2px;
+}
+
+/* Progress tint */
+.progress-eda .bg-primary { background: var(--brand) !important; }
+.progress-eda .bg-secondary { background: color-mix(in oklab, var(--brand) 20%, #0b1512 80%); }
+
+/* softer, taller blend so no bottom line */
+.hero-fade-bottom{
+  position:absolute; left:0; right:0; bottom:0; height:140px; pointer-events:none;
+  background: linear-gradient(to bottom, rgba(0,0,0,0) 0%, var(--background) 92%);
+}
+
+/* unified card system */
+.card-soft{
+  background: linear-gradient(180deg,
+    color-mix(in oklab, var(--card) 95%, #0f1a14 5%),
+    color-mix(in oklab, var(--card) 98%, #0c1310 2%)
+  );
+  border: 1px solid color-mix(in oklab, var(--border-dark) 26%, rgba(255,255,255,.06) 74%);
+  border-radius: 1rem;
+}
+
+/* KPI badge */
+.kpi-badge{ border-radius:999px; padding:2px 10px; background:color-mix(in oklab,#1B8354 22%,#0b1512 78%); color:#c7f2df; }
+
+/* optional: polish map chrome when used inside .hero-choropleth */
+.hero-choropleth .mapboxgl-ctrl-bottom-left,
+.hero-choropleth .mapboxgl-ctrl-bottom-right{
+  background: rgba(0,0,0,.35);
+  backdrop-filter: blur(6px);
+  border-radius: 12px;
+  padding: 2px 6px;
+}
