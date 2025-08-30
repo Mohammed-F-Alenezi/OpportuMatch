@@ -11,6 +11,7 @@ import logging
 import traceback
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
+from matcher.service import run_match_and_insert
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -293,7 +294,31 @@ async def create_project(p: ProjectIn, current_user: int = Depends(get_current_u
         res = supabase.table("projects").insert(payload).execute()
         if not res.data:
             raise HTTPException(status_code=400, detail="Failed to insert project")
-        return {"project": res.data[0]}
+        created = res.data[0]
+
+        # Perform matching after project creation
+        try:
+            match_out = run_match_and_insert(
+                {
+                    "id": created["id"],
+                    "slug": created.get("slug"),
+                    "name": created["name"],
+                    "description": created["description"],
+                    "sectors": created.get("sectors") or [],
+                    "stage": created["stage"],
+                    "funding_need": created.get("funding_need") or 0.0,
+                    "goals": created.get("goals") or [],
+                },
+                top_k=5,
+                calibration="relative_minmax",
+            )
+            print("MATCH DEBUG → inserted:", match_out["inserted"], "run_at:", match_out["run_at"])
+        except Exception as e:
+            print("MATCH ERROR →", e)
+            match_out = {"inserted": 0, "run_at": None}
+
+        return {"project": created, "matching": match_out}
+
     except HTTPException:
         raise
     except Exception as e:

@@ -241,6 +241,7 @@ const activeMatchResultId = useMemo(() => {
   open={ragOpen}
   onClose={() => setRagOpen(false)}
   matchResultId={activeMatchResultId}   
+  projectId={project?.id ?? undefined}
 />
     </LayoutGroup>
   );

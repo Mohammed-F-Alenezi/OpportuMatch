@@ -4,20 +4,29 @@ import type { Socket } from "socket.io-client";
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Bot, Send, Copy, RefreshCcw } from "lucide-react";
+import MarkdownBubble from "@/components/MarkdownBubble";
 
 type Msg = { id: string; role: "user" | "ai"; content: string; citations?: string[] };
 type Mood = "idle" | "smile" | "thinking";
 
 //
 // API configuration
-// Set NEXT_PUBLIC_API_URL to your FastAPI base (e.g. http://127.0.0.1:8000)
-// and optionally NEXT_PUBLIC_API_PREFIX to the router prefix (default: "/rag").
+// RAG endpoints live under /rag
 //
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 const API_PREFIX = process.env.NEXT_PUBLIC_API_PREFIX ?? "/rag";
 const api = (path: string) => `${API_BASE}${API_PREFIX}${path}`;
 
-export default function RagChatSection({ matchResultId }: { matchResultId?: string }) {
+// Root (non-/rag) API for general resources like /projects/:id
+const API_ROOT = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+
+export default function RagChatSection({
+  matchResultId,
+  projectId, // ✅ NEW: we’ll load the description by this id
+}: {
+  matchResultId?: string;
+  projectId?: string;
+}) {
   const [messages, setMessages] = useState<Msg[]>([
     {
       id: "m1",
@@ -46,9 +55,13 @@ export default function RagChatSection({ matchResultId }: { matchResultId?: stri
   const [activeMrid, setActiveMrid] = useState<string>((matchResultId ?? "").trim());
   const didAutoInit = useRef(false);
 
-  // === Summary state ===
+  // === Summary & project description state ===
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [summaryText, setSummaryText] = useState<string | null>(null);
+
+  // ✅ NEW: project description fetched by projectId
+  const [projDesc, setProjDesc] = useState<string | undefined>(undefined);
+  const [descLoading, setDescLoading] = useState(false);
 
   const EASE: number[] = [0.22, 1, 0.36, 1];
 
@@ -68,6 +81,34 @@ export default function RagChatSection({ matchResultId }: { matchResultId?: stri
   useEffect(() => {
     setActiveMrid((matchResultId ?? "").trim());
   }, [matchResultId]);
+
+  // ✅ NEW: fetch project description by projectId whenever it changes
+  useEffect(() => {
+    let abort = false;
+    async function loadDesc(pid: string) {
+      try {
+        setDescLoading(true);
+        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        const res = await fetch(`${API_ROOT}/projects/${pid}`, {
+          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        if (!abort) setProjDesc(data?.project?.description ?? undefined);
+      } catch {
+        if (!abort) setProjDesc(undefined);
+      } finally {
+        if (!abort) setDescLoading(false);
+      }
+    }
+    const pid = (projectId ?? "").trim();
+    if (pid) loadDesc(pid);
+    else setProjDesc(undefined);
+
+    return () => {
+      abort = true;
+    };
+  }, [projectId]);
 
   // Auto-init once per mount (or when MRID changes)
   useEffect(() => {
@@ -123,7 +164,11 @@ export default function RagChatSection({ matchResultId }: { matchResultId?: stri
       const res = await fetch(api("/init"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ match_result_id: mrid }),
+        body: JSON.stringify({
+          match_result_id: mrid,
+          project_id: projectId ?? null,           // ✅ NEW
+          project_description: projDesc ?? null,   // ✅ NEW
+        }),
       });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
@@ -225,7 +270,12 @@ export default function RagChatSection({ matchResultId }: { matchResultId?: stri
       const res = await fetch(api("/chat"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ match_result_id: mrid, message: text }),
+        body: JSON.stringify({
+          match_result_id: mrid,
+          message: text,
+          project_id: projectId ?? null,           // ✅ NEW
+          project_description: projDesc ?? null,   // ✅ NEW (nice-to-have)
+        }),
       });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
@@ -248,13 +298,13 @@ export default function RagChatSection({ matchResultId }: { matchResultId?: stri
   return (
     <div
       dir="rtl"
-      className="relative w-full min-h-screen grid gap-4"
+      className="relative w-full min-h-screen grid gap-4 overflow-y-auto"
       style={{ gridTemplateColumns: "1fr 300px" }}
     >
       {/* CENTER — chat */}
       <section className="relative min-w-0 min-h-0 flex flex-col z-10">
         <div
-          className="relative rounded-[24px] overflow-hidden flex flex-col min-h-0"
+          className="relative rounded-[24px] overflow-y-auto flex flex-col min-h-0"
           style={{
             background: "color-mix(in oklab, var(--card) 84%, transparent)",
             border: "1px solid var(--border)",
@@ -282,12 +332,12 @@ export default function RagChatSection({ matchResultId }: { matchResultId?: stri
                   <Bot className="w-4 h-4" />
                 </div>
                 <div className="leading-tight">
-                  <div className="font-semibold">المساعد الذكي</div>
+                  <div className="font-semibold"> راشد</div>
                   <div className="text-xs opacity-70">مطابقة البرامج • واجهة</div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 overflow-y-auto">
                 <ToolbarGhost icon={<Copy className="w-3.5 h-3.5" />} text="نسخ" onClick={copyAll} />
                 <ToolbarGhost icon={<RefreshCcw className="w-3.5 h-3.5" />} text="تفريغ" onClick={clearAll} />
                 <div className="flex items-center gap-1 text-xs" aria-label="Rashid status">
@@ -323,7 +373,9 @@ export default function RagChatSection({ matchResultId }: { matchResultId?: stri
                 }}
               >
                 <div className="mb-1 text-xs opacity-80">{m.role === "ai" ? "المساعد" : "أنت"}</div>
-                <div style={{ maxWidth: "68ch" }}>{m.content}</div>
+
+                {/* ✅ Markdown-enabled renderer */}
+                <MarkdownBubble text={m.content} rtl />
 
                 {!!m.citations?.length && (
                   <div className="mt-2 flex flex-wrap gap-2">
@@ -605,22 +657,11 @@ function Dots() {
           opacity: 0.6;
           animation: pulseDot 1.2s infinite ease-in-out;
         }
-        .dot:nth-child(2) {
-          animation-delay: 0.15s;
-        }
-        .dot:nth-child(3) {
-          animation-delay: 0.3s;
-        }
+        .dot:nth-child(2) { animation-delay: 0.15s; }
+        .dot:nth-child(3) { animation-delay: 0.3s; }
         @keyframes pulseDot {
-          0%,
-          100% {
-            transform: translateY(0);
-            opacity: 0.4;
-          }
-          50% {
-            transform: translateY(-3px);
-            opacity: 0.9;
-          }
+          0%, 100% { transform: translateY(0); opacity: 0.4; }
+          50% { transform: translateY(-3px); opacity: 0.9; }
         }
       `}</style>
     </div>
