@@ -9,6 +9,9 @@ import sys
 import pathlib
 import logging
 import traceback
+import pandas as pd
+import joblib
+import json
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 from matcher.service import run_match_and_insert
@@ -18,6 +21,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel, Field
+
+# تحميل النموذج المحفوظ
+model = joblib.load("back/models/readiness_model.joblib")
+
+# تحميل بيانات meta
+with open("back/models/meta.json") as f:
+    meta = json.load(f)
+
+# تحميل بيانات baseline
+group_baseline = pd.read_csv("back/models/group_baseline.csv")
 
 # --------------------------------------------------------------------------------------
 # Logging setup (early)
@@ -529,3 +542,74 @@ async def _on_shutdown():
         log.info("Shutting down application.")
     except Exception as e:
         log.error("Shutdown hook error:\n%s", _exc_str(e))
+
+
+# --------------------------------------------------------------------------------------
+# readiness model
+# # ------------------------------------------------------------------------------------
+class ProjectData(BaseModel):
+    sector: str   # القطاع_العام
+    region: str   # المنطقة
+    size: str     # الحجم
+
+def _tier_from_prob(p: float) -> str:
+    if p >= 0.67:
+        return "Growth-ready"
+    elif p >= 0.33:
+        return "Steady"
+    else:
+        return "Early-stage support"
+
+@app.post("/predict")
+async def predict(project_data: ProjectData):
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded.")
+
+    try:
+        year = "2025"
+
+        # بناء DataFrame من المدخلات
+        df = pd.DataFrame([{
+            "القطاع_العام": project_data.sector.strip(),
+            "المنطقة": project_data.region.strip(),
+            "الحجم": project_data.size.strip(),
+            "السنة": year,
+        }])
+
+        # تنبؤ + احتمالية (الموديل pipeline: OneHotEncoder + RF)
+        proba = float(model.predict_proba(df)[:, 1])
+        pred  = int(proba >= 0.5)
+        tier  = _tier_from_prob(proba)
+
+        # baseline لنفس المجموعة (بدون السنة)
+        baseline_val = None
+        if not group_baseline.empty:
+            mask = (
+                (group_baseline["القطاع_العام"].astype(str) == df.iloc[0]["القطاع_العام"]) &
+                (group_baseline["المنطقة"].astype(str)      == df.iloc[0]["المنطقة"]) &
+                (group_baseline["الحجم"].astype(str)        == df.iloc[0]["الحجم"])
+            )
+            row = group_baseline[mask]
+            if len(row) > 0:
+                baseline_val = float(row["baseline_growth_ready_share"].iloc[0])
+
+        message = (
+            f"Assumed year = {year}. "
+            f"Model readiness = {proba*100:.1f}%. "
+            f"Tier: {tier}."
+            + (f" Similar group baseline ≈ {baseline_val*100:.1f}%." if baseline_val is not None else "")
+        )
+
+        return {
+            "ok": True,
+            "echo": df.to_dict(orient="records")[0],
+            "prediction": pred,
+            "probability": proba,
+            "tier": tier,
+            "message": message,
+            "baseline_share": baseline_val,
+            "meta": meta,
+        }
+
+    except Exception as e:
+        raise HTTPException(500, f"Error in prediction: {e}")
