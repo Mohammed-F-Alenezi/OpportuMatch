@@ -471,60 +471,53 @@ export default function RagChatSection({
       </section>
 
       {/* SUMMARY RAIL */}
-      <aside
-        className="hidden lg:flex flex-col rounded-3xl overflow-hidden z-0 min-h-0"
+      {/* SUMMARY RAIL */}
+<aside
+  className="hidden lg:flex flex-col rounded-3xl overflow-hidden z-0 min-h-0"
+  style={{
+    background: "color-mix(in oklab, var(--card) 88%, transparent)",
+    border: "1px solid var(--border)",
+    boxShadow: "0 12px 32px rgba(0,0,0,.16), inset 0 1px 0 rgba(255,255,255,.05)",
+    backdropFilter: "blur(6px)",
+  }}
+>
+  <div className="px-4 py-3 border-b" style={{ borderColor: "var(--border)" }}>
+    {/* Title + button in the same row */}
+    <div className="flex items-center gap-2">
+      <div className="font-semibold">سياق مُسترجَع</div>
+      <button
+        onClick={toggleSummary}
+        className="rounded-xl px-3 py-1.5 text-xs font-medium hover:opacity-90"
         style={{
-          background: "color-mix(in oklab, var(--card) 88%, transparent)",
           border: "1px solid var(--border)",
-          boxShadow: "0 12px 32px rgba(0,0,0,.16), inset 0 1px 0 rgba(255,255,255,.05)",
-          backdropFilter: "blur(6px)",
+          background: summaryOpen ? "var(--brand)" : "transparent",
+          color: summaryOpen ? "white" : "inherit",
         }}
+        title="تلخيص المحادثة"
       >
-        <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: "var(--border)" }}>
-          <div>
-            <div className="font-semibold">سياق مُسترجَع</div>
-            <div className="text-xs opacity-70 mt-1">
-              {initialized
-                ? initInfo?.source_url
-                  ? `المصدر: ${initInfo.source_url} • مقاطع: ${initInfo?.chunks_indexed ?? 0}`
-                  : "لا يوجد مصدر في match_results"
-                : "جاري التهيئة تلقائيًا…"}
-            </div>
-          </div>
-          <button
-            onClick={toggleSummary}
-            className="rounded-xl px-3 py-1.5 text-xs font-medium hover:opacity-90"
-            style={{
-              border: "1px solid var(--border)",
-              background: summaryOpen ? "var(--brand)" : "transparent",
-              color: summaryOpen ? "white" : "inherit",
-            }}
-            title="تلخيص المحادثة"
-          >
-            تلخيص
-          </button>
-        </div>
+        تلخيص
+      </button>
+    </div>
 
-        <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scroll">
-          {/* ✅ NEW: Project description context */}
-          {descLoading && (
-            <ContextCard title="وصف المشروع">
-              <div>جارِ جلب وصف المشروع…</div>
-            </ContextCard>
-          )}
-          {!descLoading && projDesc?.trim() && (
-            <ContextCard title="وصف المشروع (من قاعدة البيانات)">
-              <div style={{ whiteSpace: "pre-wrap" }}>{projDesc}</div>
-            </ContextCard>
-          )}
+    {/* source / status below */}
+    <div className="text-xs opacity-70 mt-1">
+      {initialized
+        ? initInfo?.source_url
+          ? `المصدر: ${initInfo.source_url} • مقاطع: ${initInfo?.chunks_indexed ?? 0}`
+          : "لا يوجد مصدر في match_results"
+        : "جاري التهيئة تلقائيًا…"}
+    </div>
+  </div>
 
-          {summaryOpen && summaryText && (
-            <ContextCard title="ملخّص المحادثة">
-              <div style={{ whiteSpace: "pre-wrap" }}>{summaryText}</div>
-            </ContextCard>
-          )}
-        </div>
-      </aside>
+  <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scroll">
+    {summaryOpen && summaryText && (
+      <ContextCard title="ملخّص المحادثة">
+        <div style={{ whiteSpace: "pre-wrap" }}>{summaryText}</div>
+      </ContextCard>
+    )}
+  </div>
+</aside>
+
 
       {/* responsive */}
       <style jsx>{`
