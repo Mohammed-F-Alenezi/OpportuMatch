@@ -5,6 +5,7 @@ import type { Socket } from "socket.io-client";
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Bot, Send, Copy, RefreshCcw } from "lucide-react";
+import MarkdownBubble from "@/components/MarkdownBubble"; // <<— الجديد
 
 type Msg = { id: string; role: "user" | "ai"; content: string; citations?: string[] };
 type Mood = "idle" | "smile" | "thinking";
@@ -176,42 +177,55 @@ export default function RagChatSection({ matchResultId }: { matchResultId?: stri
             className="min-h-0 overflow-y-auto px-4 md:px-5 pt-4 pb-4 space-y-4 custom-scroll"
             style={{ overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" as any }}
           >
-            {messages.map((m) => (
-              <motion.div
-                key={m.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.22, ease: EASE }}
-                className={`group relative max-w-[86%] rounded-2xl p-3 text-[15px] leading-7 ${m.role === "user" ? "ml-auto" : ""}`}
-                style={{
-                  background: m.role === "user"
-                    ? "linear-gradient(180deg, color-mix(in oklab, var(--brand) 26%, var(--card)), color-mix(in oklab, var(--brand) 18%, var(--card)))"
-                    : "linear-gradient(180deg, color-mix(in oklab, var(--card) 98%, transparent), color-mix(in oklab, var(--card) 92%, transparent))",
-                  color: m.role === "user" ? "white" : "var(--foreground)",
-                  boxShadow: m.role === "user"
-                    ? "0 14px 34px rgba(27,131,84,.24), inset 0 1px 0 rgba(255,255,255,.06)"
-                    : "0 12px 28px rgba(0,0,0,.12), inset 0 1px 0 rgba(255,255,255,.06)",
-                }}
-              >
-                <div className="mb-1 text-xs opacity-80">{m.role === "ai" ? "المساعد" : "أنت"}</div>
-                <div style={{ maxWidth: "68ch" }}>{m.content}</div>
+            {messages.map((m) => {
+              const bubbleBase =
+                "group relative max-w-[86%] rounded-2xl p-3 text-[15px] leading-7";
+              const isUser = m.role === "user";
+              return (
+                <motion.div
+                  key={m.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.22, ease: EASE }}
+                  className={`${bubbleBase} ${isUser ? "ml-auto" : ""}`}
+                  style={{
+                    background: isUser
+                      ? "linear-gradient(180deg, color-mix(in oklab, var(--brand) 26%, var(--card)), color-mix(in oklab, var(--brand) 18%, var(--card)))"
+                      : "linear-gradient(180deg, color-mix(in oklab, var(--card) 98%, transparent), color-mix(in oklab, var(--card) 92%, transparent))",
+                    color: isUser ? "white" : "var(--foreground)",
+                    boxShadow: isUser
+                      ? "0 14px 34px rgba(27,131,84,.24), inset 0 1px 0 rgba(255,255,255,.06)"
+                      : "0 12px 28px rgba(0,0,0,.12), inset 0 1px 0 rgba(255,255,255,.06)",
+                  }}
+                >
+                  <div className="mb-1 text-xs opacity-80">{isUser ? "أنت" : "المساعد"}</div>
 
-                {!!m.citations?.length && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {m.citations.map((c, i) => (
-                      <button
-                        key={i}
-                        onClick={() => paste(c)}
-                        className="text-[11px] rounded-md px-2 py-1 border hover:opacity-90"
-                        style={{ borderColor: "var(--border)", background: "color-mix(in oklab, var(--card) 88%, transparent)" }}
-                      >
-                        {c}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </motion.div>
-            ))}
+                  {/* المحتوى */}
+                  {isUser ? (
+                    <div style={{ maxWidth: "68ch", whiteSpace: "pre-wrap" }}>
+                      {m.content}
+                    </div>
+                  ) : (
+                    <MarkdownBubble text={m.content} rtl />
+                  )}
+
+                  {!!m.citations?.length && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {m.citations.map((c, i) => (
+                        <button
+                          key={i}
+                          onClick={() => paste(c)}
+                          className="text-[11px] rounded-md px-2 py-1 border hover:opacity-90"
+                          style={{ borderColor: "var(--border)", background: "color-mix(in oklab, var(--card) 88%, transparent)" }}
+                        >
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </motion.div>
+              );
+            })}
 
             {loading && (
               <div className="relative max-w-[86%] rounded-2xl p-3 text-sm border" style={{ borderColor:"var(--border)", background:"linear-gradient(180deg, color-mix(in oklab, var(--card) 96%, transparent), color-mix(in oklab, var(--card) 92%, transparent))", boxShadow:"0 10px 26px rgba(0,0,0,.10), inset 0 1px 0 rgba(255,255,255,.05)" }}>
