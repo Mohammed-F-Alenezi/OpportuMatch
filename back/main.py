@@ -103,6 +103,18 @@ except Exception as e:
     log.critical("Failed to import/mount chatbot.routers.rag. Check package files & __init__.py. Details:\n%s", _exc_str(e))
     raise
 
+
+# --------------------------------------------------------------------------------------
+# Optional: Matcher import (clear diagnostics if missing)
+# --------------------------------------------------------------------------------------
+_MATCHER_AVAILABLE = True
+try:
+    # Ensure matcher package is importable: project_root/matcher/...
+    from matcher.service import run_match_and_insert
+    log.info("Matcher service imported.")
+except Exception as e:
+    _MATCHER_AVAILABLE = False
+    log.warning("Matcher not available. Skipping auto-match on create.\n%s", _exc_str(e))
 # --------------------------------------------------------------------------------------
 # Health endpoint
 # --------------------------------------------------------------------------------------
@@ -261,6 +273,8 @@ async def create_project(p: ProjectIn, current_user: int = Depends(get_current_u
                 status_code=422,
                 detail=f"Invalid 'stage' value. Allowed: {', '.join(DB_STAGES)}",
             )
+        if not p.sectors:
+            raise HTTPException(status_code=422, detail="sectors must not be empty")
 
         base_slug = slugify(p.name)
         slug = base_slug
@@ -293,7 +307,35 @@ async def create_project(p: ProjectIn, current_user: int = Depends(get_current_u
         res = supabase.table("projects").insert(payload).execute()
         if not res.data:
             raise HTTPException(status_code=400, detail="Failed to insert project")
-        return {"project": res.data[0]}
+
+        created = res.data[0]
+
+        matching = {"inserted": 0, "run_at": None, "error": None}
+        if _MATCHER_AVAILABLE:
+            try:
+                matching = run_match_and_insert(
+                    {
+                        "id": created["id"],
+                        "slug": created.get("slug"),
+                        "name": created["name"],
+                        "description": created["description"],
+                        "sectors": created.get("sectors") or [],
+                        "stage": created["stage"],
+                        "funding_need": created.get("funding_need") or 0.0,
+                        "goals": created.get("goals") or [],
+                    },
+                    top_k=int(os.getenv("MATCH_TOP_K", "5")),
+                    calibration=os.getenv("MATCH_CALIBRATION", "relative_minmax"),
+                )
+                log.info("MATCH → inserted=%s run_at=%s", matching.get("inserted"), matching.get("run_at"))
+            except Exception as e:
+                matching["error"] = str(e)
+                log.warning("MATCH ERROR → %s", _exc_str(e))
+        else:
+            matching["error"] = "matcher_not_available"
+
+        return {"project": created, "matching": matching}
+
     except HTTPException:
         raise
     except Exception as e:
