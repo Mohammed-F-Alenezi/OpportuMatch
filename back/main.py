@@ -791,3 +791,75 @@ def _compat_summary(payload: RagSummaryIn):
 @app.post("/test-supabase")
 def _compat_test(payload: RagTestIn):
     return rag_test(payload)
+
+
+
+# --------------------------------------------------------------------------------------
+# readiness model
+# # ------------------------------------------------------------------------------------
+class ProjectData(BaseModel):
+    sector: str   # القطاع_العام
+    region: str   # المنطقة
+    size: str     # الحجم
+
+def _tier_from_prob(p: float) -> str:
+    if p >= 0.67:
+        return "Growth-ready"
+    elif p >= 0.33:
+        return "Steady"
+    else:
+        return "Early-stage support"
+
+@app.post("/predict")
+async def predict(project_data: ProjectData):
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded.")
+
+    try:
+        year = "2025"
+
+        # بناء DataFrame من المدخلات
+        df = pd.DataFrame([{
+            "القطاع_العام": project_data.sector.strip(),
+            "المنطقة": project_data.region.strip(),
+            "الحجم": project_data.size.strip(),
+            "السنة": year,
+        }])
+
+        # تنبؤ + احتمالية (الموديل pipeline: OneHotEncoder + RF)
+        proba = float(model.predict_proba(df)[:, 1])
+        pred  = int(proba >= 0.5)
+        tier  = _tier_from_prob(proba)
+
+        # baseline لنفس المجموعة (بدون السنة)
+        baseline_val = None
+        if not group_baseline.empty:
+            mask = (
+                (group_baseline["القطاع_العام"].astype(str) == df.iloc[0]["القطاع_العام"]) &
+                (group_baseline["المنطقة"].astype(str)      == df.iloc[0]["المنطقة"]) &
+                (group_baseline["الحجم"].astype(str)        == df.iloc[0]["الحجم"])
+            )
+            row = group_baseline[mask]
+            if len(row) > 0:
+                baseline_val = float(row["baseline_growth_ready_share"].iloc[0])
+
+        message = (
+            f"Assumed year = {year}. "
+            f"Model readiness = {proba*100:.1f}%. "
+            f"Tier: {tier}."
+            + (f" Similar group baseline ≈ {baseline_val*100:.1f}%." if baseline_val is not None else "")
+        )
+
+        return {
+            "ok": True,
+            "echo": df.to_dict(orient="records")[0],
+            "prediction": pred,
+            "probability": proba,
+            "tier": tier,
+            "message": message,
+            "baseline_share": baseline_val,
+            "meta": meta,
+        }
+
+    except Exception as e:
+        raise HTTPException(500, f"Error in prediction: {e}")
