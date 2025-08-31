@@ -91,8 +91,6 @@ export default function Page() {
   const [activeIdx, setActiveIdx] = useState(0);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-
-  // overlay state for the orb
   const [ragOpen, setRagOpen] = useState(false);
 
   useEffect(() => {
@@ -134,12 +132,11 @@ export default function Page() {
     () => matches.filter((_, i) => i !== activeIdx).slice(0, 4),
     [matches, activeIdx]
   );
-const activeMatchResultId = useMemo(() => {
-  if (!active) return undefined;
-  // Prefer row id; fall back to any alias your API returns
-  const rid = (active as any).id ?? (active as any).match_result_id;
-  return rid != null && String(rid).trim() ? String(rid) : undefined;
-}, [active]);
+  const activeMatchResultId = useMemo(() => {
+    if (!active) return undefined;
+    const rid = (active as any).id ?? (active as any).match_result_id;
+    return rid != null && String(rid).trim() ? String(rid) : undefined;
+  }, [active]);
 
   if (loading) {
     return (
@@ -194,8 +191,9 @@ const activeMatchResultId = useMemo(() => {
             className="group inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm"
             style={{
               borderColor: "var(--border)",
-              background: "color-mix(in oklab, var(--foreground) 6%, transparent)",
+              background: "var(--card)",
               color: "var(--foreground)",
+              boxShadow: "0 4px 14px rgba(0,0,0,.06)",
             }}
             title="Open EDA Dashboard"
           >
@@ -207,9 +205,9 @@ const activeMatchResultId = useMemo(() => {
         <div dir="ltr" className="grid md:grid-cols-3 gap-6 items-stretch">
           {/* LEFT: 2×2 */}
           <section className="md:col-span-1 self-stretch">
-            <div className="h-full grid ">
+            <div className="h-full grid">
               <div
-                className="grid gap-12 mt-1"
+                className="grid gap-4 mt-1"
                 style={{ gridTemplateColumns: "repeat(2,160px)", gridAutoRows: "160px" }}
               >
                 {others.map((m, i) => (
@@ -226,10 +224,8 @@ const activeMatchResultId = useMemo(() => {
                     style={{
                       width: 160,
                       height: 160,
-                      background:
-                        "color-mix(in oklab, var(--card) 70%, var(--background))",
-                      borderColor:
-                        "color-mix(in oklab, var(--border) 70%, transparent)",
+                      background: "var(--card)",
+                      borderColor: "var(--border)",
                       opacity: 0.35,
                     }}
                   />
@@ -255,11 +251,11 @@ const activeMatchResultId = useMemo(() => {
       </main>
 
       {/* Full-page takeover overlay controlled here */}
-<BubbleRagOverlay
-  open={ragOpen}
-  onClose={() => setRagOpen(false)}
-  matchResultId={activeMatchResultId}   
-/>
+      <BubbleRagOverlay
+        open={ragOpen}
+        onClose={() => setRagOpen(false)}
+        matchResultId={activeMatchResultId}
+      />
     </LayoutGroup>
   );
 }
@@ -274,13 +270,13 @@ function SmallMatchCard({ m, onSelect }: { m: Match; onSelect: () => void }) {
       onClick={onSelect}
       initial={{ opacity: 0, y: 8, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      whileHover={{ y: -3, scale: 1.02, boxShadow: "0 12px 24px rgba(0,0,0,.18)" }}
+      whileHover={{ y: -3, scale: 1.02 }}  /* shadow handled by CSS */
       whileTap={{ scale: 0.985 }}
       transition={{ type: "tween", ease: EASE, duration: 0.22 }}
-      className="rounded-2xl border p-4 text-right overflow-hidden w-[168px] h-[168px]"
+      className="rounded-2xl border p-4 text-right overflow-hidden w-[168px] h-[168px] card-hover"
       style={{
-        background: "color-mix(in oklab, var(--card) 70%, var(--background))",
-        borderColor: "color-mix(in oklab, var(--border) 70%, transparent)",
+        background: "var(--card)",
+        borderColor: "var(--border)",
       }}
       title={m.program_name || undefined}
     >
@@ -306,46 +302,13 @@ function BigMatchCard({
   project: Project;
   onChat: () => void;
 }) {
-  // ✅ Log all data whenever the active big card changes
   useEffect(() => {
     if (!m) return;
     try {
-      console.groupCollapsed(
-        "%cBigMatchCard changed",
-        "color:#10b981;font-weight:600"
-      );
-      console.log("match.id:", m.id);
-      console.log("program_id:", m.program_id);
-      console.log("program_name:", m.program_name);
-      console.log("source_url:", m.source_url);
-      console.log("rank:", m.rank, "run_at:", m.run_at);
-
-      console.log("scores:", {
-        score_rule: m.score_rule,
-        score_content: m.score_content,
-        score_goal: m.score_goal,
-        score_final_raw: m.score_final_raw,
-        score_final_cal: m.score_final_cal,
-        raw_distance: m.raw_distance,
-      });
-
-      console.log("subs:", {
-        subs_sector: m.subs_sector,
-        subs_stage: m.subs_stage,
-        subs_funding: m.subs_funding,
-      });
-
-      console.log("reasons:", m.reasons);
-      console.log("improvements:", m.improvements);
-      console.log("evidence_project:", m.evidence_project);
-      console.log("evidence_program:", m.evidence_program);
-
-      console.log("project:", project);
+      console.groupCollapsed("%cBigMatchCard changed", "color:#10b981;font-weight:600");
+      console.log({ m, project });
       console.groupEnd();
-    } catch {
-      // Fallback single log
-      console.log("BigMatchCard changed:", { match: m, project });
-    }
+    } catch {}
   }, [m, project]);
 
   const score = pickScore(m);
@@ -361,11 +324,10 @@ function BigMatchCard({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 10, scale: 0.985 }}
       transition={{ type: "tween", ease: EASE, duration: 0.35 }}
-      className="relative rounded-3xl p-6 md:p-8 overflow-hidden border"
+      className="relative rounded-3xl p-6 md:p-8 overflow-hidden border elev-lg"
       style={{
         background: "var(--card)",
         borderColor: "var(--border)",
-        boxShadow: "0 18px 48px rgba(0,0,0,.12)",
       }}
       dir="rtl"
     >
@@ -374,13 +336,13 @@ function BigMatchCard({
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "radial-gradient(1200px 520px at 90% -10%, color-mix(in oklab, var(--brand) 10%, transparent), transparent 55%)",
+            "radial-gradient(900px 360px at 90% -10%, color-mix(in oklab, var(--brand) 5%, transparent), transparent 55%)",
         }}
       />
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 rounded-3xl"
-        style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,.06)" }}
+        style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,.04)" }}
       />
 
       <div className="relative z-10 flex items-center justify-between gap-4">
@@ -395,7 +357,6 @@ function BigMatchCard({
                 {m.program_name || "برنامج بدون اسم"}
               </h3>
 
-              {/* Orb chat trigger */}
               <div className="ml-1">
                 <HeroOrbCTA size={68} onOpen={onChat} />
               </div>
@@ -404,7 +365,6 @@ function BigMatchCard({
             <div className="text-xs mt-0.5" style={{ color: "var(--subtext-light)" }}>
               الترتيب {m.rank != null ? `#${m.rank}` : "—"} · آخر تشغيل:{" "}
               {m.run_at ? new Date(m.run_at).toLocaleString("ar-SA") : "—"}
-
               {m.source_url && (
                 <a
                   href={m.source_url}
@@ -443,11 +403,8 @@ function BigMatchCard({
         <Chip label="تمويل" value={pct(m.subs_funding)} />
         {typeof project.funding_need === "number" && (
           <span
-            className="text-xs px-2.5 py-1 rounded-full border"
-            style={{
-              borderColor: "color-mix(in oklab, var(--border) 70%, transparent)",
-              background: "color-mix(in oklab, var(--brand) 8%, var(--card))",
-            }}
+            className="chip text-xs px-2.5 py-1 rounded-full border"
+            title={`احتياج المشروع · ${project.funding_need?.toLocaleString()} ﷼`}
           >
             احتياج المشروع · {project.funding_need.toLocaleString()} ﷼
           </span>
@@ -489,7 +446,8 @@ function Ring({
         cx={size / 2}
         cy={size / 2}
         r={r}
-        stroke="color-mix(in oklab, var(--border) 80%, transparent)"
+        className="ring-base"
+        stroke="var(--border)"
         strokeWidth={stroke}
         fill="none"
       />
@@ -523,11 +481,14 @@ function Ring({
 function Meter({ label, value, hint }: { label: string; value: number | null; hint?: string }) {
   const pctVal = value ?? 0;
   return (
-    <div className="rounded-xl border p-3" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
+    <div
+      className="rounded-xl border p-3 card"
+      style={{ borderColor: "var(--border)", background: "var(--card)" }}
+    >
       <div className="text-xs mb-1" style={{ color: "var(--subtext-light)" }}>
         {label}
       </div>
-      <div className="h-2.5 rounded-full overflow-hidden" style={{ background: "color-mix(in oklab, var(--foreground) 10%, transparent)" }}>
+      <div className="h-2.5 rounded-full overflow-hidden meter-track">
         <motion.div
           className="h-full"
           style={{ background: "var(--brand)" }}
@@ -536,8 +497,14 @@ function Meter({ label, value, hint }: { label: string; value: number | null; hi
           transition={{ type: "tween", ease: EASE, duration: 0.6 }}
         />
       </div>
-      <div className="mt-1 text-xs">{value != null ? `${pctVal}%` : "—"}</div>
-      {hint && <div className="mt-0.5 text-[11px]" style={{ color: "var(--subtext-light)" }}>{hint}</div>}
+      <div className="mt-1 text-xs meter-value">
+        {value != null ? `${pctVal}%` : "—"}
+      </div>
+      {hint && (
+        <div className="mt-0.5 text-[11px]" style={{ color: "var(--subtext-light)" }}>
+          {hint}
+        </div>
+      )}
     </div>
   );
 }
@@ -545,11 +512,7 @@ function Meter({ label, value, hint }: { label: string; value: number | null; hi
 function Chip({ label, value }: { label: string; value: number | null }) {
   return (
     <span
-      className="text-xs px-2.5 py-1 rounded-full border"
-      style={{
-        borderColor: "color-mix(in oklab, var(--border) 70%, transparent)",
-        background: "color-mix(in oklab, var(--foreground) 8%, transparent)",
-      }}
+      className="chip text-xs px-2.5 py-1 rounded-full border"
       title={value != null ? `${value}%` : undefined}
     >
       {label} {value != null ? `· ${value}%` : ""}
@@ -561,13 +524,8 @@ function Box({ title, items, neutral = false }: { title: string; items: string[]
   if (!items.length) return null;
   return (
     <div
-      className="rounded-xl border p-3"
-      style={{
-        borderColor: "var(--border)",
-        background: neutral
-          ? "color-mix(in oklab, var(--foreground) 6%, transparent)"
-          : "color-mix(in oklab, var(--brand) 8%, var(--card))",
-      }}
+      className={`rounded-xl border p-3 ${neutral ? "box-neutral" : "box-accent"}`}
+      style={{ borderColor: "var(--border)" }}
     >
       <div className="text-sm font-semibold mb-2" style={{ color: "var(--foreground)" }}>
         {title}

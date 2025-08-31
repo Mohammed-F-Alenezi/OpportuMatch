@@ -3,33 +3,27 @@ import type { Metadata } from "next";
 import NavBar from "@/components/ui/NavBar";
 import { ThemeProvider } from "@/components/theme-provider";
 
-// Prevent light "flash" before hydration by forcing dark on <html>
-// and also setting it ASAP via an inline script.
+/** Prevent theme flash: prefer user's saved choice, otherwise default to LIGHT. */
 function NoFlashScript() {
   return (
     <script
       dangerouslySetInnerHTML={{
         __html: `
-(function() {
+(function () {
   try {
-    var stored = localStorage.getItem('theme');
+    var stored = localStorage.getItem('theme');               // 'light' | 'dark' | null
     var systemDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    // If user has a stored choice, use it; otherwise default to dark (your app default)
-    var shouldDark = stored ? (stored === 'dark') : true;
-    if (shouldDark) {
-      document.documentElement.classList.add('dark');
-      document.documentElement.classList.remove('light');
-    } else {
-      document.documentElement.classList.add('light');
-      document.documentElement.classList.remove('dark');
-    }
+    var theme = stored ? stored : 'light';                    // default LIGHT
+    // If you prefer system by default, uncomment:
+    // if (!stored) theme = systemDark ? 'dark' : 'light';
+    var root = document.documentElement;
+    root.classList.remove('light','dark');
+    root.classList.add(theme);
   } catch (e) {
-    // On any error, default to dark
-    document.documentElement.classList.add('dark');
-    document.documentElement.classList.remove('light');
+    document.documentElement.classList.remove('dark');
+    document.documentElement.classList.add('light');
   }
-})();
-        `.trim(),
+})();`.trim(),
       }}
     />
   );
@@ -42,45 +36,39 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html
-      lang="ar"
-      dir="rtl"
-      className="dark"               // hard‑set to avoid white first paint; next-themes can still switch
-      suppressHydrationWarning
-    >
+    <html lang="ar" dir="rtl" suppressHydrationWarning>
       <head>
         <NoFlashScript />
         <link
-       rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/d3plus@2/build/d3plus.css"
-       />
-       <link
-        rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/d3plus-geomap@2/build/d3plus-geomap.css"
+          rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/d3plus@2/build/d3plus.css"
         />
-
+        <link
+          rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/d3plus-geomap@2/build/d3plus-geomap.css"
+        />
       </head>
+
       <body
-        className="min-h-screen bg-background text-foreground"
+        className="min-h-screen"
         style={{
-          // Safe fallbacks in case CSS variables fail to load
-          backgroundColor: "var(--background, #0b0f10)",
-          color: "var(--foreground, #e8f0ee)",
+          background: "var(--background)",
+          color: "var(--foreground)",
           WebkitFontSmoothing: "antialiased",
           MozOsxFontSmoothing: "grayscale",
         }}
       >
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={true}>
           <NavBar />
           {children}
 
-          {/* Global footer */}
-          <footer className="mx-auto max-w-7xl px-4 py-10 text-center text-xs"
-                  style={{ color: "var(--subtext)" }}>
+          <footer
+            className="mx-auto max-w-7xl px-4 py-10 text-center text-xs"
+            style={{ color: "var(--subtext-light)" }}
+          >
             © {new Date().getFullYear()} مزايا — واجهة (MVP)
           </footer>
 
-          {/* Portal root for overlays/modals if you ever need React portals */}
           <div id="modal-root" />
         </ThemeProvider>
       </body>
