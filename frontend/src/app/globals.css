@@ -234,3 +234,45 @@ body { font-feature-settings: "ss01" on; }
   border-radius: 12px;
   padding: 2px 6px;
 }
+
+
+/* === shadcn token bridge so light mode matches dark mode === */
+:root{
+  --primary: var(--brand);
+  --primary-foreground: #ffffff;
+
+  /* subtle surfaces used by badges, alerts, list items, etc. */
+  --secondary: color-mix(in oklab, var(--foreground) 6%, var(--background));
+  --secondary-foreground: var(--foreground);
+
+  --muted: color-mix(in oklab, var(--foreground) 6%, var(--background));
+  --muted-foreground: color-mix(in oklab, var(--foreground) 46%, var(--background));
+
+  --accent: color-mix(in oklab, var(--brand) 12%, var(--background));
+  --accent-foreground: var(--foreground);
+
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  /* shadcn expects these */
+  --popover: var(--card);
+  --popover-foreground: var(--card-foreground);
+  --input: var(--border);
+  --ring: var(--brand);
+  --border: color-mix(in oklab, var(--foreground) 12%, var(--background));
+}
+
+.dark{
+  --secondary: color-mix(in oklab, var(--foreground) 7%, var(--background));
+  --secondary-foreground: var(--foreground);
+
+  --muted: color-mix(in oklab, var(--foreground) 7%, var(--background));
+  --muted-foreground: color-mix(in oklab, var(--foreground) 60%, var(--background));
+
+  --accent: color-mix(in oklab, var(--brand) 14%, var(--background));
+  --accent-foreground: var(--foreground);
+
+  --border: color-mix(in oklab, var(--foreground) 14%, var(--background));
+}
+
+
