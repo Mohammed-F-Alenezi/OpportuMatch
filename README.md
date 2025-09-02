@@ -71,9 +71,40 @@ src/
 ├─ lib/                      # Utilities, constants, API helpers
 └─ styles/                   # Global styles (globals.css, theme config)
 
+src/
+├─ app/
+│  ├─ page.tsx               # Landing page
+│  ├─ signin/page.tsx        # Sign-in page
+│  ├─ signup/page.tsx        # Sign-up page
+│  ├─ bizinfo/page.tsx       # Project submission form
+│  ├─ projects/[id]/page.tsx # Project recommendations
+│  └─ dashboard/page.tsx     # User dashboard (future)
+│
+├─ components/               # UI components (cards, forms, modals)
+├─ lib/                      # Utilities, constants, API helpers
+└─ styles/                   # Global styles (globals.css, theme config)
+
 '''
 
 ## ⚡ Getting Started
+
+### Prerequisites
+- **Node.js** ≥ 18  
+- **npm** or **yarn**  
+- **Python** ≥ 3.10 (for backend)  
+- Running **FastAPI backend** with proper `.env` settings (`SUPABASE_URL`, `SUPABASE_KEY`, etc.)
+
+### Frontend Setup
+```bash
+# Clone the repo
+git clone https://github.com/your-org/bouslat-al-mumakkinat.git
+cd bouslat-al-mumakkinat
+
+# Install dependencies
+npm install
+
+# Run the development server
+npm run dev
 
 ### Prerequisites
 - **Node.js** ≥ 18  
