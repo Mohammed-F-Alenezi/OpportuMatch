@@ -105,7 +105,7 @@ export default function Page() {
             className="mt-5 flex justify-start gap-3 ml-auto max-w-[680px] lg:max-w-[720px] pr-8 md:pr-10"
           >
             {/* Sign up — green base, subtle lighten on hover (works light/dark) */}
-            <Link href="/signup">
+            <Link href="/login">
               <motion.button
                 className="h-12 px-7 text-base rounded-xl border"
                 style={{
@@ -124,26 +124,7 @@ export default function Page() {
               </motion.button>
             </Link>
 
-            {/* Sign in — outline that tints green on hover (theme-aware fill) */}
-            <Link href="/login">
-              <motion.button
-                className="h-12 px-7 text-base rounded-xl border"
-                style={{
-                  backgroundColor: "transparent",
-                  color: "var(--foreground)",
-                  borderColor: "var(--border)",
-                }}
-                whileHover={{
-                  backgroundColor: "color-mix(in oklab, var(--brand) 10%, var(--card))",
-                  borderColor: "color-mix(in oklab, var(--brand) 55%, var(--border))",
-                  boxShadow: "0 8px 20px rgba(27,131,84,.10)",
-                  transition: { type: "tween", ease: EASE, duration: 0.14 },
-                }}
-                whileTap={{ scale: 0.98, transition: { duration: 0.08 } }}
-              >
-                تسجيل الدخول
-              </motion.button>
-            </Link>
+          
           </div>
         </section>
       </div>

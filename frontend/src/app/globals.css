@@ -214,3 +214,83 @@ svg text,
 /* general card hover for other components */
 .card-hover{ transition: box-shadow .2s ease, transform .2s ease }
 .card-hover:hover{ box-shadow:0 12px 28px rgba(0,0,0,.10); transform: translateY(-2px) }
+
+
+.half-hero { position: relative; }
+.hero-circle{
+  position:absolute; top:50%; right:-25%; transform:translateY(-50%);
+  width:140%; height:140%; border-radius:9999px;
+  background:
+    radial-gradient(120% 120% at 30% 30%, color-mix(in oklab, white 14%, var(--brand)) 0%, transparent 60%),
+    radial-gradient(100% 100% at 70% 70%, color-mix(in oklab, white 10%, var(--brand-alt)) 0%, transparent 62%),
+    linear-gradient(135deg, var(--brand), var(--brand-alt));
+  filter:saturate(110%);
+  animation: orbDriftGlobal 20s ease-in-out infinite;
+}
+@media (max-width:768px){
+  .hero-circle{ right:-35%; width:170%; height:170%; }
+}
+
+
+/* Animated page gradient */
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.bg-anim{
+  background:
+    radial-gradient(900px 380px at 85% -10%, color-mix(in oklab, var(--brand) 10%, transparent), transparent 55%),
+    radial-gradient(780px 340px at 10% 115%, color-mix(in oklab, var(--brand) 7%, transparent), transparent 60%),
+    linear-gradient(120deg, color-mix(in oklab, var(--background) 92%, black), var(--background));
+  background-size: 200% 200%;
+  animation: gradientShift 20s ease-in-out infinite;
+}
+
+/* Soft blobs */
+.bg-blob{ position:absolute; filter: blur(28px); opacity:.18; }
+.bg-blob-1{ width:44vw; height:44vw; left:-12vw; top:6vh; background: radial-gradient(circle, var(--brand), transparent 70%); }
+.bg-blob-2{ width:36vw; height:36vw; right:-10vw; bottom:-8vh; background: radial-gradient(circle, var(--brand-alt), transparent 70%); }
+
+/* Grain overlay */
+.noise{
+  position:absolute; inset:-20%;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255,255,255,.02) 0 2px, transparent 2px 4px),
+    repeating-linear-gradient(90deg, rgba(0,0,0,.025) 0 2px, transparent 2px 4px);
+  mix-blend-mode: overlay; opacity:.05; pointer-events:none;
+}
+
+/* Circle glow + subtle float */
+@keyframes floatSlow {
+  0% { transform: translateY(-50%) scale(1); }
+  50% { transform: translateY(calc(-50% + 8px)) scale(1.005); }
+  100% { transform: translateY(-50%) scale(1); }
+}
+.circle-glow{
+  box-shadow: 0 0 80px color-mix(in oklab, var(--brand) 30%, transparent),
+              0 0 160px color-mix(in oklab, var(--brand-alt) 20%, transparent);
+  filter: saturate(110%);
+  animation: floatSlow 14s ease-in-out infinite;
+}
+
+/* Twinkle dots */
+.twinkle-dot{
+  position:absolute; width:8px; height:8px; border-radius:999px;
+  background: color-mix(in oklab, white 70%, var(--brand));
+  box-shadow: 0 0 14px color-mix(in oklab, white 60%, var(--brand));
+  pointer-events:none;
+}
+
+/* Dark-mode tuning */
+.dark .bg-anim{ animation-duration: 24s; }
+.dark .noise{ opacity:.06; }
+
+/* Circle rotation + breathing without shifting its anchor */
+@keyframes circlePulseRotate {
+  0%   { transform: scale(0.97) rotate(0deg);   opacity: .9; }
+  25%  { transform: scale(1.02) rotate(90deg);  opacity: .96; }
+  50%  { transform: scale(0.99) rotate(180deg); opacity: .92; }
+  75%  { transform: scale(1.03) rotate(270deg); opacity: .95; }
+  100% { transform: scale(0.97) rotate(360deg); opacity: .9; }
+}

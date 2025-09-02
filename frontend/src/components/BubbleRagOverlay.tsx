@@ -75,17 +75,17 @@ export default function BubbleRagOverlay({
           >
             {/* Header */}
             <div
-              dir="rtl"
-              className="relative z-10 flex items-center justify-between gap-3 px-4 sm:px-6 py-3 border-b"
-              style={{ borderColor: "var(--border)", background: "transparent", backdropFilter: "blur(4px)" }}
+              dir="ltr"
+              className="relative z-10 flex items-center justify-between gap-3 px-20 sm:px-10 py-3 border-b"
+              style={{ borderColor: "var(--border)", backdropFilter: "blur(4px)" }}
             >
-              <div className="font-semibold">المساعد الذكي (RAG)</div>
+              
               <button
                 onClick={onClose}
                 className="rounded-lg border px-3 py-1 text-sm"
                 style={{ borderColor: "var(--border)" }}
               >
-                إغلاق
+                X
               </button>
             </div>
 
