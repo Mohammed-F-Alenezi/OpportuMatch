@@ -42,12 +42,22 @@ The system leverages **AI-powered analytics, machine learning models, and intera
 - **Data Ingestion:** BeautifulSoup + Selenium (for scraping & updating program data)
 
 ---
+## 🧩 Current MVP Features
+- **Auth pages**: Sign in / Sign up.  
+- **Project input form**: Add project details (title, sector, stage, funding needs).  
+- **Program explorer page**: (extensible with compatibility score & RAG explanations later).  
+- **Theme system**: Dark/Light mode using unified CSS variables.  
+- **Backend-ready integration** with FastAPI.  
 
+---
 ## Project Goals
-- 🚀 Support organizations in aligning with **Vision 2030** transformation initiatives.  
-- 🏆 Provide a **standardized benchmark** to evaluate readiness and competitiveness.  
-- 🎯 Empower decision-makers with **data-driven insights** for strategic planning.  
-- 🌐 Build an **intelligent assistant (Rashid)** to make analytics more accessible and user-friendly.  
+- Support organizations in aligning with **Vision 2030** transformation initiatives.  
+- Provide a **standardized benchmark** to evaluate readiness and competitiveness.  
+- Empower decision-makers with **data-driven insights** for strategic planning.  
+- Build an **intelligent assistant (Rashid)** to make analytics more accessible and user-friendly.  
+- Increase accuracy of program-to-project matching.  
+- Reduce wasted time in manual searching.  
+- Improve efficiency of funding agencies in reaching qualified projects.  
 
 ---
 
