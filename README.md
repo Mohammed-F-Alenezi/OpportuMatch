@@ -1,88 +1,88 @@
-# Buṣlat Al-Mumkināt (Enablers Compass)
-
-## Overview
-**Buṣlat Al-Mumkināt** is an intelligent readiness assessment and guidance platform that helps organizations evaluate their current state, compare with peers, and discover pathways for growth.  
-The system leverages **AI-powered analytics, machine learning models, and interactive dashboards** to provide actionable insights that align with Saudi Vision 2030 goals.
+# بُوصْلَةُ الْمُمَكِّنَاتْ 🧭  
+*A smart platform that helps entrepreneurs and SMEs discover the most suitable government support and funding programs by analyzing project descriptions and matching them with program requirements using AI (NLP + RAG).*
 
 ---
 
-## Key Features
-- 📊 **Readiness Assessment Model**  
-  Calculates organizational readiness across multiple pillars (Efficiency, Scale, People, Finance, etc.) using historical and current data.
+## 📖 Overview
+Finding the right funding opportunity is often time-consuming and confusing.  
+**بُوصْلَةُ الْمُمَكِّنَاتْ** makes it simple by allowing users to:
 
-- 🔍 **Cohort-Based Benchmarking**  
-  Places organizations within a percentile ranking compared to peers in the same **sector, region, and size**.
+- Enter their project details *(sector, stage, funding needs, goals)*.  
+- Get a ranked list of the **Top-5 most relevant programs**.  
+- View compatibility scores and details.  
+- Easily access program information and apply through official links.  
 
-- 🤖 **AI-Powered Assistant (Rashid)**  
-  An intelligent voice and text assistant that guides users through results, explains metrics, and suggests improvements.
-
-- 🧭 **Enablers Compass Dashboard**  
-  An interactive dashboard showing readiness scores, sector comparisons, and year-over-year progress.
-
-- 📈 **Predictive Insights**  
-  Machine learning models (Random Forest Regressor + cohort-based normalization) trained on data from **2019–2024** and tested on **2025**, enabling robust forward-looking analysis.
+This is the **MVP (v1.0)** version of the project, designed to scale into a **full AI-powered funding assistant**.  
 
 ---
 
-## System Workflow
-1. **Data Collection** – Input data from official sources and organizational records.  
-2. **Normalization & Processing** – Clean, standardize, and scale data across regions, sizes, and sectors.  
-3. **Readiness Scoring** – Compute raw readiness scores using weighted pillars.  
-4. **Percentile Ranking** – Convert raw scores into percentiles within each year for fair benchmarking.  
-5. **Insights & Guidance** – Present results via dashboard and **Rashid AI assistant**, including tailored improvement suggestions.  
+## 🚀 Features
+- 🔐 **User Authentication** – Sign up and log in with a modern UI.  
+- 📂 **Project Management** – Add and manage project details *(name, description, type, stage, goals, vision, required support)*.  
+- 🤖 **Smart Matching** – Search initiatives and programs with semantic similarity and explicit rules *(sector, funding range, etc.)*.  
+- 📊 **Initiative Dashboard** – View recommended programs with scores and details.  
+- 💡 **Explainability (RAG)** – *“Why is this program suitable?”* answers powered by AI *(future)*.  
+- 🎨 **Responsive UI** – RTL-friendly interface, with **light/dark mode** support.  
+- 🛠️ **Admin Mode (future)** – Manage programs, upload documents, and monitor analytics.  
 
 ---
 
-## Technology Stack
-- **Backend:** Python (FastAPI), Scikit-learn, Pandas  
-- **ML Models:** Random Forest Regressor, PCA/SVD for dimensionality reduction  
-- **Database:** Supabase (DB/Auth), ChromaDB (Vector Search)  
-- **Frontend:** Next.js (React), Tailwind CSS, Streamlit (for data exploration)  
-- **AI Orchestration:** LangChain + GPT-4o-mini  
-- **Data Ingestion:** BeautifulSoup + Selenium (for scraping & updating program data)
-
----
-## 🧩 Current MVP Features
-- **Auth pages**: Sign in / Sign up.  
-- **Project input form**: Add project details (title, sector, stage, funding needs).  
-- **Program explorer page**: (extensible with compatibility score & RAG explanations later).  
-- **Theme system**: Dark/Light mode using unified CSS variables.  
-- **Backend-ready integration** with FastAPI.  
-
----
-## Project Goals
-- Support organizations in aligning with **Vision 2030** transformation initiatives.  
-- Provide a **standardized benchmark** to evaluate readiness and competitiveness.  
-- Empower decision-makers with **data-driven insights** for strategic planning.  
-- Build an **intelligent assistant (Rashid)** to make analytics more accessible and user-friendly.  
-- Increase accuracy of program-to-project matching.  
-- Reduce wasted time in manual searching.  
-- Improve efficiency of funding agencies in reaching qualified projects.  
+## 🛠️ Tech Stack
+- **Frontend:** Next.js 14 + React + TypeScript  
+- **UI/UX:** Tailwind CSS, shadcn/ui, Framer Motion  
+- **Theming:** next-themes (light/dark mode)  
+- **Backend:** FastAPI REST API  
+- **Auth:** JWT tokens (local storage)  
+- **AI Layer (Upcoming):** Embeddings + Hybrid Retrieval + RAG for explanations  
 
 ---
 
-## Example Output
-When an organization inputs its details (sector, region, size, year), the system provides:  
-- **Readiness Percentile:** e.g., *73.7% — higher than 67% of similar organizations in 2025*.  
-- **Comparison vs Peers:** Highlights sector and regional averages.  
-- **Actionable Guidance:** Steps to improve readiness and performance.  
+## 📂 Project Structure
+- **Next.js by Vercel** – The React Framework for modern web applications.  
+- **FastAPI** – High-performance Python backend framework, easy to learn and production-ready.  
 
 ---
 
-## Vision Alignment
-> *“Our ambition is to build a thriving economy powered by knowledge, innovation, and opportunity.”*  
-— Inspired by **HRH Crown Prince Mohammed bin Salman**, Vision 2030  
-
-Buṣlat Al-Mumkināt embodies this vision by enabling organizations to **measure today, improve tomorrow, and achieve excellence**.
-
----
-
-## Contributors
-- **Team Buṣlat Al-Mumkināt** (Hackathon Project)  
-- AI Assistant **Rashid** – Voice-powered guide for readiness insights  
+## 📌 Roadmap
+- [x] MVP with authentication, project management, and matching.  
+- [ ] Add RAG-powered explainability layer.  
+- [ ] Expand program database and admin management tools.  
+- [ ] Integrate analytics dashboard for monitoring impact.  
 
 ---
 
-## License
-This project is licensed under the **MIT License** – free to use, modify, and distribute.  
+## 📜 License
+This project is licensed under the **MIT License** – feel free to use, modify, and share.  
 
+---
+src/
+├─ app/
+│ ├─ page.tsx # Landing page
+│ ├─ signin/page.tsx # Sign-in page
+│ ├─ signup/page.tsx # Sign-up page
+│ ├─ bizinfo/page.tsx # Project submission form
+│ ├─ projects/[id]/page.tsx# Project recommendations
+│ └─ dashboard/page.tsx # User dashboard (future)
+├─ components/ # UI components (cards, forms, modals)
+├─ lib/ # Utilities, constants, API helpers
+└─ styles/ # Global styles (globals.css, theme config)
+
+## ⚡ Getting Started
+
+### Prerequisites
+- **Node.js** ≥ 18  
+- **npm** or **yarn**  
+- **Python** ≥ 3.10 (for backend)  
+- Running **FastAPI backend** with proper `.env` settings (`SUPABASE_URL`, `SUPABASE_KEY`, etc.)
+
+### Frontend Setup
+```bash
+# Clone the repo
+git clone https://github.com/your-org/bouslat-al-mumakkinat.git
+cd bouslat-al-mumakkinat
+
+# Install dependencies
+npm install
+
+# Run the development server
+npm run dev
