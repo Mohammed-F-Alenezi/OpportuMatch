@@ -55,17 +55,22 @@ This is the **MVP (v1.0)** version of the project, designed to scale into a **fu
 This project is licensed under the **MIT License** – feel free to use, modify, and share.  
 
 ---
+# 📂 Project Structure
+
 src/
 ├─ app/
 │ ├─ page.tsx # Landing page
 │ ├─ signin/page.tsx # Sign-in page
 │ ├─ signup/page.tsx # Sign-up page
 │ ├─ bizinfo/page.tsx # Project submission form
-│ ├─ projects/[id]/page.tsx# Project recommendations
+│ ├─ projects/[id]/page.tsx # Project recommendations
 │ └─ dashboard/page.tsx # User dashboard (future)
+│
 ├─ components/ # UI components (cards, forms, modals)
 ├─ lib/ # Utilities, constants, API helpers
 └─ styles/ # Global styles (globals.css, theme config)
+
+Copy code
 
 ## ⚡ Getting Started
 
