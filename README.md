@@ -71,6 +71,7 @@ src/
 ├─ lib/                      # Utilities, constants, API helpers
 └─ styles/                   # Global styles (globals.css, theme config)
 
+'''
 
 ## ⚡ Getting Started
 
