@@ -67,7 +67,7 @@ export default function ProjectCard({
 
       {/* النصوص */}
       <div className="flex-1 min-w-0">
-        <h3 className="text-lg md:text-xl font-extrabold leading-snug truncate">
+        <h3 className="text-lg md:text-xl font-extrabold">
           {name}
         </h3>
         {peerNote && (

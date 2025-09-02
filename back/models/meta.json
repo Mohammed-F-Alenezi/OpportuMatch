@@ -1,1 +1,1 @@
-{"threshold_mode":"fixed","fixed_threshold":70.0,"target_pos_rate":0.26,"train_years":["2019","2020","2021","2022","2023","2024","2025"],"latest_year_seen":"2025"}
+{"mode":"cohort","train_years":["2019","2020","2021","2022","2023","2024"],"latest_year_seen":"2025","features_cat":["القطاع_العام","المنطقة","الحجم"],"features_num":["pillar_efficiency_norm","pillar_margin_norm","pillar_scale_norm","pillar_people_cost_norm","pillar_efficiency_dev","pillar_margin_dev","pillar_scale_dev","pillar_people_cost_dev"],"cohort_file":"cohort_index.parquet.gz"}

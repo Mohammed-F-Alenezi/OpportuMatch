@@ -9,6 +9,10 @@ import sys
 import pathlib
 import logging
 import traceback
+import json
+from pathlib import Path
+import pandas as pd
+import joblib
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -17,6 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel, Field
+
 
 # --------------------------------------------------------------------------------------
 # Logging setup (early)
@@ -115,6 +120,89 @@ try:
 except Exception as e:
     _MATCHER_AVAILABLE = False
     log.warning("Matcher not available. Skipping auto-match on create.\n%s", _exc_str(e))
+    
+    
+    
+
+MODEL_PATH = os.getenv("MODEL_PATH", "back/models/readiness_model.joblib")
+BASELINE_PATH = os.getenv("BASELINE_PATH", "back/models/group_baseline.csv")
+COHORT_PATH = os.getenv("COHORT_PATH", "back/models/cohort_index.parquet.gz")
+
+model = None
+baseline_df = None
+cohort_df = None
+meta = {
+    "mode": "cohort",
+    "latest_year_seen": "2025",
+    "features_cat": ["القطاع_العام","المنطقة","الحجم"],
+}
+
+
+# --- مدخلات واجهة التنبؤ (السنة ثابتة 2025 من السيرفر) ---
+class PredictIn(BaseModel):
+    sector: str   # مثال: "الصناعات التحويلية"
+    region: str   # مثال: "منطقة الرياض"
+    size: str     # مثال: "صغيرة"
+
+class PredictOut(BaseModel):
+    ok: bool
+    echo: dict
+    # حقول سنضيفها لاحقًا بعد توصيل الحسابات الفعلية:
+    # probability: Optional[float] = None
+    # tier: Optional[str] = None
+    # message: Optional[str] = None
+    # baseline_share: Optional[float] = None
+    meta: dict
+def _normalize_cat(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
+    if df is None or df.empty:
+        return df
+    for c in cols:
+        if c in df.columns:
+            df[c] = df[c].astype(str).str.strip()
+    return df
+
+def _load_artifacts():
+    global model, baseline_df, cohort_df
+    try:
+        if os.path.exists(MODEL_PATH):
+            model = joblib.load(MODEL_PATH)
+            log.info(f"✅ model loaded from {MODEL_PATH}: {type(model)}")
+        else:
+            log.warning(f"⚠️ MODEL not found at {MODEL_PATH}")
+    except Exception as e:
+        log.error(f"❌ Failed to load model: {e}")
+
+    try:
+        if os.path.exists(BASELINE_PATH):
+            df = pd.read_csv(BASELINE_PATH)
+            # rename any accidental variants if needed
+            rename_map = {
+                "sector": "القطاع_العام",
+                "region": "المنطقة",
+                "size": "الحجم",
+            }
+            df = df.rename(columns={k:v for k,v in rename_map.items() if k in df.columns})
+            # strip
+            df = _normalize_cat(df, ["القطاع_العام","المنطقة","الحجم"])
+            baseline_df = df
+            log.info(f"✅ baseline loaded: rows={len(baseline_df)}; cols={list(baseline_df.columns)}")
+        else:
+            log.warning(f"⚠️ BASELINE not found at {BASELINE_PATH}")
+    except Exception as e:
+        log.error(f"❌ Failed to load baseline: {e}")
+
+    try:
+        if os.path.exists(COHORT_PATH):
+            df = pd.read_parquet(COHORT_PATH)
+            df = _normalize_cat(df, ["القطاع_العام","المنطقة","الحجم"])
+            cohort_df = df
+            log.info(f"✅ cohort loaded: rows={len(cohort_df)}; cols={list(cohort_df.columns)}")
+        else:
+            log.warning(f"⚠️ COHORT not found at {COHORT_PATH}")
+    except Exception as e:
+        log.error(f"❌ Failed to load cohort: {e}")
+
+    
 # --------------------------------------------------------------------------------------
 # Health endpoint
 # --------------------------------------------------------------------------------------
@@ -535,6 +623,7 @@ async def project_matches(
 async def _on_startup():
     try:
         log.info("Starting the application...")
+        _load_artifacts()
         # (Optional) ping a trivial table if you want to verify DB connectivity here
         # supabase.table("health_check").select("id").limit(1).execute()
     except Exception as e:
@@ -833,75 +922,264 @@ def _compat_summary(payload: RagSummaryIn):
 @app.post("/test-supabase")
 def _compat_test(payload: RagTestIn):
     return rag_test(payload)
-
-
-
 # --------------------------------------------------------------------------------------
-# readiness model
-# # ------------------------------------------------------------------------------------
+# Readiness model – no 50% default, hierarchical prior, hardcoded options
+# --------------------------------------------------------------------------------------
+from fastapi import Body, HTTPException
+import os
+import numpy as np
+import pandas as pd
+from typing import Optional, Tuple
+
 class ProjectData(BaseModel):
     sector: str   # القطاع_العام
     region: str   # المنطقة
     size: str     # الحجم
 
 def _tier_from_prob(p: float) -> str:
-    if p >= 0.67:
+    if p >= 0.60:
         return "Growth-ready"
-    elif p >= 0.33:
+    elif p >= 0.35:
         return "Steady"
     else:
         return "Early-stage support"
 
-@app.post("/predict")
-async def predict(project_data: ProjectData):
-    if model is None:
-        raise HTTPException(status_code=503, detail="Model not loaded.")
+
+BASELINE_SHARE_COLS = [
+    "baseline_growth_ready_share",
+    "baseline_ready_share",
+    "ready_share",
+    # add your actual column name here if different, e.g.:
+    # "grp_ready_share"
+]
+# Columns that may exist in your cohort file representing a probability/label
+COHORT_PROB_COLUMNS = [
+    "ready_share", "probability", "proba", "y_pred_proba",
+    "growth_ready", "ready_prob", "is_ready", "ready_flag"
+]
+
+# ---------- Hardcoded options (as requested; no backend data dependency) ----------
+@app.get("/options")
+def get_options():
+    return {
+        "sector": [
+            "أنشطة الخدمات الأخرى",
+            "أنشطة الخدمات الإدارية وخدمات الدعم",
+            "أنشطة خدمات الإقامة والطعام",
+            "إمدادات الكهرباء والغاز والبخار وتكييف الهواء",
+            "إمدادات المياه وأنشطة الصرف الصحي وإدارة النفايات",
+            "الأنشطة العقارية",
+            "الأنشطة المالية وأنشطة التأمين",
+            "الأنشطة المهنية والعلمية والتقنية",
+            "التشييد",
+            "التعدين واستغلال المحاجر",
+            "التعليم",
+            "الصحة والعمل الاجتماعي",
+            "الصناعات التحويلية",
+            "الفنون والترفية والتسليه",
+            "المعلومات والاتصالات",
+            "النقل والتخزين",
+            "تجارة الجملة والتجزئة وإصلاح المركبات ذات المحركات والدراجات النارية",
+        ],
+        "region": [
+            "المنطقة الشرقية","منطقة الباحة","منطقة الجوف","منطقة الحدود الشمالية",
+            "منطقة الرياض","منطقة القصيم","منطقة المدينة المنورة","منطقة تبوك",
+            "منطقة جازان","منطقة حائل","منطقة عسير","منطقة مكة المكرمة","منطقة نجران",
+        ],
+        "size": ["صغيرة","متناهية الصغر","متوسطة"],
+        "latest_year_seen": "2025",
+        "mode": "cohort",
+    }
+
+# ---------- Priors from baseline (hierarchical) ----------
+def _baseline_prior(sector: str, region: str, size: str) -> Optional[float]:
+    """
+    Build a prior from baseline_df using a hierarchy:
+      1) exact (sector, region, size)
+      2) sector+size (any region)
+      3) sector only
+      4) size only
+      5) global mean
+    """
+    if baseline_df is None or baseline_df.empty:
+        return None
+
+    share_cols = [
+        "baseline_growth_ready_share",
+        "baseline_ready_share",
+        "ready_share",
+    ]
+    col = next((c for c in share_cols if c in baseline_df.columns), None)
+    if not col:
+        return None
+
+    def _mean(df: pd.DataFrame) -> Optional[float]:
+        s = pd.to_numeric(df[col], errors="coerce").dropna()
+        return float(s.mean()) if len(s) else None
 
     try:
-        year = "2025"
+        # 1) exact
+        df = baseline_df[
+            (baseline_df["القطاع_العام"] == sector) &
+            (baseline_df["المنطقة"]     == region) &
+            (baseline_df["الحجم"]       == size)
+        ]
+        v = _mean(df)
+        if v is not None: return v
 
-        # بناء DataFrame من المدخلات
+        # 2) sector+size
+        df = baseline_df[
+            (baseline_df["القطاع_العام"] == sector) &
+            (baseline_df["الحجم"]       == size)
+        ]
+        v = _mean(df)
+        if v is not None: return v
+
+        # 3) sector only
+        df = baseline_df[(baseline_df["القطاع_العام"] == sector)]
+        v = _mean(df)
+        if v is not None: return v
+
+        # 4) size only
+        df = baseline_df[(baseline_df["الحجم"] == size)]
+        v = _mean(df)
+        if v is not None: return v
+
+        # 5) global
+        return _mean(baseline_df)
+    except Exception as e:
+        log.warning(f"baseline prior failed: {e}")
+        return None
+
+# ---------- Cohort stats (if your cohort has a usable prob/label column) ----------
+def _cohort_stats(sector: str, region: str, size: str) -> Tuple[int, Optional[float], Optional[str]]:
+    """
+    Return (n, raw_mean, used_col) for the matched group.
+    raw_mean is the mean of one of COHORT_PROB_COLUMNS if present; otherwise None.
+    """
+    if cohort_df is None or cohort_df.empty:
+        return 0, None, None
+    try:
+        sub = cohort_df[
+            (cohort_df["القطاع_العام"] == sector) &
+            (cohort_df["المنطقة"]     == region) &
+            (cohort_df["الحجم"]       == size)
+        ]
+        n = len(sub)
+        if n == 0:
+            return 0, None, None
+
+        for col in COHORT_PROB_COLUMNS:
+            if col in sub.columns:
+                vals = pd.to_numeric(sub[col], errors="coerce").dropna()
+                if not vals.empty:
+                    return n, float(vals.mean()), col
+        return n, None, None
+    except Exception as e:
+        log.warning(f"cohort lookup failed: {e}")
+        return 0, None, None
+
+# ---------- Optional: use a model if it exposes predict_proba ----------
+def _model_prob_for(sector: str, region: str, size: str, year: str) -> Optional[float]:
+    try:
+        if model is None:
+            return None
         df = pd.DataFrame([{
-            "القطاع_العام": project_data.sector.strip(),
-            "المنطقة": project_data.region.strip(),
-            "الحجم": project_data.size.strip(),
+            "القطاع_العام": sector,
+            "المنطقة": region,
+            "الحجم": size,
             "السنة": year,
         }])
-
-        # تنبؤ + احتمالية (الموديل pipeline: OneHotEncoder + RF)
-        proba = float(model.predict_proba(df)[:, 1])
-        pred  = int(proba >= 0.5)
-        tier  = _tier_from_prob(proba)
-
-        # baseline لنفس المجموعة (بدون السنة)
-        baseline_val = None
-        if not group_baseline.empty:
-            mask = (
-                (group_baseline["القطاع_العام"].astype(str) == df.iloc[0]["القطاع_العام"]) &
-                (group_baseline["المنطقة"].astype(str)      == df.iloc[0]["المنطقة"]) &
-                (group_baseline["الحجم"].astype(str)        == df.iloc[0]["الحجم"])
-            )
-            row = group_baseline[mask]
-            if len(row) > 0:
-                baseline_val = float(row["baseline_growth_ready_share"].iloc[0])
-
-        message = (
-            f"Assumed year = {year}. "
-            f"Model readiness = {proba*100:.1f}%. "
-            f"Tier: {tier}."
-            + (f" Similar group baseline ≈ {baseline_val*100:.1f}%." if baseline_val is not None else "")
-        )
-
-        return {
-            "ok": True,
-            "echo": df.to_dict(orient="records")[0],
-            "prediction": pred,
-            "probability": proba,
-            "tier": tier,
-            "message": message,
-            "baseline_share": baseline_val,
-            "meta": meta,
-        }
-
+        if hasattr(model, "predict_proba"):
+            proba = model.predict_proba(df)
+            arr = np.asarray(proba)
+            if arr.ndim == 2 and arr.shape[1] > 1:
+                return float(arr[0, 1])
+        if isinstance(model, dict) and callable(model.get("predict_proba")):
+            return float(model["predict_proba"](df))
+        return None
     except Exception as e:
-        raise HTTPException(500, f"Error in prediction: {e}")
+        log.warning(f"model inference failed: {e}")
+        return None
+
+# ---------- Predict (year fixed to 2025) ----------
+@app.post("/predict")
+def predict(payload: Dict[str, str] = Body(...)):
+    sector = str(payload.get("sector") or payload.get("القطاع_العام") or "").strip()
+    region = str(payload.get("region") or payload.get("المنطقة") or "").strip()
+    size   = str(payload.get("size")   or payload.get("الحجم")   or "").strip()
+    year   = "2025"
+
+    echo = {"القطاع_العام": sector, "المنطقة": region, "الحجم": size, "السنة": year}
+
+    has_baseline = baseline_df is not None and not baseline_df.empty
+    has_cohort   = cohort_df   is not None and not cohort_df.empty
+    has_model    = model is not None
+
+    # 1) hierarchical prior (defaults to 0.4, NOT 0.5)
+    prior = _baseline_prior(sector, region, size)
+    if prior is None:
+        prior = float(os.getenv("PRIOR_DEFAULT", "0.4"))
+
+    # 2) cohort stats
+    n, raw_mean, used_col = _cohort_stats(sector, region, size) if has_cohort else (0, None, None)
+
+    # 3) combine: cohort (if real) with Bayesian smoothing; else model; else prior
+    alpha = float(os.getenv("CALIB_ALPHA", "25"))  # weight of the prior
+    probability: Optional[float] = None
+    prob_source: str = "unknown"
+    cohort_estimate: Optional[float] = None
+
+    if raw_mean is not None:
+        sum_ready = raw_mean * n
+        probability = (sum_ready + alpha * prior) / (n + alpha)
+        prob_source = f"cohort_calibrated:{used_col}"
+        cohort_estimate = raw_mean
+    else:
+        model_prob = _model_prob_for(sector, region, size, year) if has_model else None
+        if model_prob is not None:
+            probability = float(model_prob)
+            prob_source = "model"
+        else:
+            probability = float(prior)  # meaningful prior (e.g., 0.4)
+            prob_source = "prior_only"
+
+    # 4) clamp to avoid crazy edges
+    clip_lo = float(os.getenv("CALIB_CLIP_LO", "0.05"))
+    clip_hi = float(os.getenv("CALIB_CLIP_HI", "0.95"))
+    probability = max(clip_lo, min(clip_hi, float(probability)))
+
+    tier = _tier_from_prob(probability)
+    pred = int(probability >= 0.5)
+
+    # just a rough confidence by sample size
+    confidence = "high" if n >= 200 else "medium" if n >= 50 else "low"
+
+    message = (
+        f"Assumed year = {year}. "
+        f"Model readiness (calibrated) = {probability*100:.1f}%. "
+        f"Tier: {tier}. n={n}, prior={prior:.3f}, raw_mean={raw_mean if raw_mean is not None else '—'}."
+    )
+
+    return {
+        "ok": True,
+        "echo": echo,
+        "prediction": pred,
+        "probability": probability,
+        "tier": tier,
+        "message": message,
+        "baseline_share": None,              # prior covers this role
+        "cohort_estimate": cohort_estimate,  # raw mean if available
+        "meta": {
+            "mode": meta.get("mode", "cohort"),
+            "latest_year_seen": meta.get("latest_year_seen", "2025"),
+            "features_cat": meta.get("features_cat"),
+            "has_baseline": has_baseline,
+            "has_cohort": has_cohort,
+            "prob_source": prob_source,
+            "n": n,
+            "raw_mean": raw_mean,
+            "prior": prior,
+            "confidence": confidence,
+        },
+    }
