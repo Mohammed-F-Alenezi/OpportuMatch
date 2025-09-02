@@ -45,9 +45,9 @@ This is the **MVP (v1.0)** version of the project, designed to scale into a **fu
 
 ## 📌 Roadmap
 - [x] MVP with authentication, project management, and matching.  
-- [ ] Add RAG-powered explainability layer.  
-- [ ] Expand program database and admin management tools.  
-- [ ] Integrate analytics dashboard for monitoring impact.  
+- [x] Add RAG-powered explainability layer.  
+- [x] Expand program database and admin management tools.  
+- [x] Integrate analytics dashboard for monitoring impact.  
 
 ---
 
@@ -55,22 +55,22 @@ This is the **MVP (v1.0)** version of the project, designed to scale into a **fu
 This project is licensed under the **MIT License** – feel free to use, modify, and share.  
 
 ---
-# 📂 Project Structure
+## 📂 Project Structure
 
+```plaintext
 src/
 ├─ app/
-│ ├─ page.tsx # Landing page
-│ ├─ signin/page.tsx # Sign-in page
-│ ├─ signup/page.tsx # Sign-up page
-│ ├─ bizinfo/page.tsx # Project submission form
-│ ├─ projects/[id]/page.tsx # Project recommendations
-│ └─ dashboard/page.tsx # User dashboard (future)
+│  ├─ page.tsx               # Landing page
+│  ├─ signin/page.tsx        # Sign-in page
+│  ├─ signup/page.tsx        # Sign-up page
+│  ├─ bizinfo/page.tsx       # Project submission form
+│  ├─ projects/[id]/page.tsx # Project recommendations
+│  └─ dashboard/page.tsx     # User dashboard (future)
 │
-├─ components/ # UI components (cards, forms, modals)
-├─ lib/ # Utilities, constants, API helpers
-└─ styles/ # Global styles (globals.css, theme config)
+├─ components/               # UI components (cards, forms, modals)
+├─ lib/                      # Utilities, constants, API helpers
+└─ styles/                   # Global styles (globals.css, theme config)
 
-Copy code
 
 ## ⚡ Getting Started
 
