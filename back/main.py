@@ -161,12 +161,56 @@ def _normalize_cat(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
             df[c] = df[c].astype(str).str.strip()
     return df
 
+
+def _extract_model(obj):
+    """
+    Accepts:
+      - sklearn estimator/pipeline with predict_proba
+      - dict with {"predict_proba": callable}  -> use directly
+      - dict with {"model": estimator}         -> unwrap
+      - dict with {"pipeline": estimator}      -> unwrap
+    Returns the estimator/dict usable by _model_prob_for.
+    """
+    if obj is None:
+        return None
+    if hasattr(obj, "predict_proba"):
+        return obj
+    if isinstance(obj, dict):
+        if callable(obj.get("predict_proba", None)):
+            return obj
+        if "model" in obj and hasattr(obj["model"], "predict_proba"):
+            return obj["model"]
+        if "pipeline" in obj and hasattr(obj["pipeline"], "predict_proba"):
+            return obj["pipeline"]
+    return obj
+
+def _positive_proba_from_estimator(est, X):
+    import numpy as np
+    proba = est.predict_proba(X)
+    arr = np.asarray(proba)
+    if arr.ndim != 2:
+        return None
+    # default to col 1 if 2+ classes
+    idx = 1 if arr.shape[1] > 1 else 0
+    try:
+        if hasattr(est, "classes_"):
+            classes = list(est.classes_)
+            for i, c in enumerate(classes):
+                if c in (1, True, "ready", "Ready", "growth_ready"):
+                    idx = i
+                    break
+    except Exception:
+        pass
+    return float(arr[0, idx])
+
+
 def _load_artifacts():
     global model, baseline_df, cohort_df
     try:
         if os.path.exists(MODEL_PATH):
-            model = joblib.load(MODEL_PATH)
-            log.info(f"✅ model loaded from {MODEL_PATH}: {type(model)}")
+            raw_model = joblib.load(MODEL_PATH)
+            model = _extract_model(raw_model)
+            log.info(f"✅ model loaded from {MODEL_PATH}: {type(raw_model)} -> using {type(model)}")
         else:
             log.warning(f"⚠️ MODEL not found at {MODEL_PATH}")
     except Exception as e:
@@ -175,14 +219,16 @@ def _load_artifacts():
     try:
         if os.path.exists(BASELINE_PATH):
             df = pd.read_csv(BASELINE_PATH)
-            # rename any accidental variants if needed
-            rename_map = {
-                "sector": "القطاع_العام",
-                "region": "المنطقة",
-                "size": "الحجم",
-            }
-            df = df.rename(columns={k:v for k,v in rename_map.items() if k in df.columns})
-            # strip
+            rename_map = {"sector": "القطاع_العام", "region": "المنطقة", "size": "الحجم"}
+            df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
+
+            # If the file only has sector_avg_percentile, expose it as ready_share in [0,1]
+            if "sector_avg_percentile" in df.columns and "ready_share" not in df.columns:
+                s = pd.to_numeric(df["sector_avg_percentile"], errors="coerce")
+                if s.max() and s.max() > 1.5:  # looks like 0..100
+                    s = s / 100.0
+                df["ready_share"] = s
+
             df = _normalize_cat(df, ["القطاع_العام","المنطقة","الحجم"])
             baseline_df = df
             log.info(f"✅ baseline loaded: rows={len(baseline_df)}; cols={list(baseline_df.columns)}")
@@ -201,6 +247,7 @@ def _load_artifacts():
             log.warning(f"⚠️ COHORT not found at {COHORT_PATH}")
     except Exception as e:
         log.error(f"❌ Failed to load cohort: {e}")
+
 
     
 # --------------------------------------------------------------------------------------
@@ -1090,13 +1137,21 @@ def _model_prob_for(sector: str, region: str, size: str, year: str) -> Optional[
             "الحجم": size,
             "السنة": year,
         }])
-        if hasattr(model, "predict_proba"):
-            proba = model.predict_proba(df)
-            arr = np.asarray(proba)
-            if arr.ndim == 2 and arr.shape[1] > 1:
-                return float(arr[0, 1])
+
+        # dict with callable
         if isinstance(model, dict) and callable(model.get("predict_proba")):
-            return float(model["predict_proba"](df))
+            val = model["predict_proba"](df)
+            try:
+                return float(val)  # scalar from callable
+            except Exception:
+                import numpy as np
+                arr = np.asarray(val)
+                return float(arr.ravel()[0])
+
+        # sklearn-like estimator/pipeline
+        if hasattr(model, "predict_proba"):
+            return _positive_proba_from_estimator(model, df)
+
         return None
     except Exception as e:
         log.warning(f"model inference failed: {e}")
