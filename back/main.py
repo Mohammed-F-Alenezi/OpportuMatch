@@ -1099,9 +1099,10 @@ def _baseline_prior(sector: str, region: str, size: str) -> Optional[float]:
         return None
 
 # ---------- Cohort stats (if your cohort has a usable prob/label column) ----------
-def _cohort_stats(sector: str, region: str, size: str) -> Tuple[int, Optional[float], Optional[str]]:
+
+def _cohort_stats(sector: str, region: str, size: str, year: str) -> Tuple[int, Optional[float], Optional[str]]:
     """
-    Return (n, raw_mean, used_col) for the matched group.
+    Return (n, raw_mean, used_col) for the matched group in the given year.
     raw_mean is the mean of one of COHORT_PROB_COLUMNS if present; otherwise None.
     """
     if cohort_df is None or cohort_df.empty:
@@ -1112,6 +1113,15 @@ def _cohort_stats(sector: str, region: str, size: str) -> Tuple[int, Optional[fl
             (cohort_df["المنطقة"]     == region) &
             (cohort_df["الحجم"]       == size)
         ]
+        # filter by year if available
+        if "السنة" in sub.columns:
+            y = year
+            # allow int or str comparison
+            try:
+                yi = int(year)
+                sub = sub[(sub["السنة"] == yi) | (sub["السنة"] == str(y))]
+            except:
+                sub = sub[(sub["السنة"] == str(y))]
         n = len(sub)
         if n == 0:
             return 0, None, None
@@ -1177,7 +1187,8 @@ def predict(payload: Dict[str, str] = Body(...)):
         prior = float(os.getenv("PRIOR_DEFAULT", "0.4"))
 
     # 2) cohort stats
-    n, raw_mean, used_col = _cohort_stats(sector, region, size) if has_cohort else (0, None, None)
+    n, raw_mean, used_col = _cohort_stats(sector, region, size, year) if has_cohort else (0, None, None)
+
 
     # 3) combine: cohort (if real) with Bayesian smoothing; else model; else prior
     alpha = float(os.getenv("CALIB_ALPHA", "25"))  # weight of the prior
