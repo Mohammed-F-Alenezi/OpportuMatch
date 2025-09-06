@@ -2,28 +2,215 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Light by default */
+/* oceans transparent (both themes) */
+.d3plus-geomap-ocean,
+.dark .d3plus-geomap-ocean { fill: transparent; }
+
+/* ================= THEME TOKENS ================= */
 :root {
-  --bg: #ECF3F6;
-  --surface: #FFFFFF;
-  --surface2: #F3F7FA;
-  --text: #0F172A;
-  --subtext: #475569;
-  --border: #D1D5DB;
+  --radius: 0.65rem;
+  --background: oklch(0.96 0.004 160);
+  --foreground: oklch(0.20 0.004 240);
+  --card: oklch(0.97 0 0);
+  --card-foreground: var(--foreground);
+  --border: oklch(0 0 0 / 16%);
+  --input: oklch(0 0 0 / 12%);
+  --ring: #1B8354;
+
   --brand: #1B8354;
-  --brandAlt: #145E3D;
-  --success: #C1E4C1;
+  --brand-alt: #145E3D;
+
+  /* refs */
+  --dark-bg:#111927; --dark-surface:#1F2A37; --dark-alt:#0D3D27;
+  --light-bg:#EEF3F0; --light-surface:#FAFAFA; --light-alt:#E6EFEA;
+
+  --success:#0F6A43;
+  --border-dark:#64748B;  /* slate-500 */
+  --border-light:#D1D5DB; /* gray-300 */
+
+  --text-dark:#0B1220; --text-light:#111827;
+  --subtext-dark:#334155; --subtext-light:#4B5563;
+
+  --popover: var(--card);
+  --popover-foreground: var(--card-foreground);
+
+  --accent: oklch(0.88 0.02 286.033);
+  --accent-foreground: oklch(0.26 0 0);
+
+  /* shadcn bridge */
+  --primary: var(--brand);
+  --primary-foreground:#fff;
+  --secondary: color-mix(in oklab, var(--foreground) 6%, var(--background));
+  --secondary-foreground: var(--foreground);
+  --muted: color-mix(in oklab, var(--foreground) 6%, var(--background));
+  --muted-foreground: color-mix(in oklab, var(--foreground) 46%, var(--background));
+  --accent-foreground: var(--foreground);
+  --destructive:#ef4444; --destructive-foreground:#fff;
+  --input: var(--border);
 }
 
-/* Dark */
-[data-theme="dark"] {
-  --bg: #111927;
-  --surface: #1F2A37;
-  --surface2: #0D3D27;
-  --text: #E5E7EB;
-  --subtext: #9CA3AF;
-  --border: #263241;
+/* Dark theme overrides */
+.dark {
+  --background: rgba(17,25,39,.5);
+  --foreground: oklch(0.985 0 0);
+  --card: rgba(31,42,55);
+  --card-foreground: oklch(0.985 0 0);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring:#1B8354;
+
+  --brand:#1B8354; --brand-alt:#145E3D;
+
+  --dark-bg:#111927; --dark-surface:#1F2A37; --dark-alt:#0D3D27;
+  --light-bg:#111927; --light-surface:#1F2A37; --light-alt:#0D3D27;
+
+  --success:#C1E4C1;
+  --border-dark:#263241; --border-light:#263241;
+
+  --text-dark:#E5E7EB; --text-light:#E5E7EB;
+  --subtext-dark:#9CA3AF; --subtext-light:#9CA3AF;
+
+  --popover: var(--card);
+  --popover-foreground: var(--card-foreground);
+
+  --accent: oklch(0.274 0.006 286.033);
+  --accent-foreground: oklch(0.985 0 0);
+
+  /* shadcn bridge */
+  --secondary: color-mix(in oklab, var(--foreground) 7%, var(--background));
+  --muted: color-mix(in oklab, var(--foreground) 7%, var(--background));
+  --muted-foreground: color-mix(in oklab, var(--foreground) 60%, var(--background));
+  --accent-foreground: var(--foreground);
 }
 
-/* Utils */
+/* ====== BASE ====== */
+html, body {
+  background: var(--background);
+  color: var(--foreground);
+}
 body { font-feature-settings: "ss01" on; }
+
+/* ====== ORB EFFECT ====== */
+@keyframes orbDriftGlobal {
+  0%{transform:translate3d(0,0,0) scale(1);opacity:.92}
+  25%{transform:translate3d(8px,-10px,0) scale(1.01);opacity:.96}
+  50%{transform:translate3d(0,8px,0) scale(1.005);opacity:.93}
+  75%{transform:translate3d(-8px,-8px,0) scale(.995);opacity:.95}
+  100%{transform:translate3d(0,0,0) scale(1);opacity:.92}
+}
+@keyframes orbWavesGlobal {
+  0%{transform:translate3d(0,0,0) scale(1);opacity:.40}
+  50%{transform:translate3d(10px,-12px,0) scale(1.008);opacity:.45}
+  100%{transform:translate3d(0,0,0) scale(1);opacity:.40}
+}
+.orb-animated{position:absolute;inset:0;pointer-events:none;will-change:transform,opacity;transform:translateZ(0)}
+.orb-layer-1{
+  background:
+    radial-gradient(circle at 40% 35%, rgba(59,255,155,.25), transparent 35%),
+    radial-gradient(circle at 60% 65%, rgba(0,255,200,.20), transparent 40%),
+    radial-gradient(circle at 50% 50%, rgba(16,255,120,.14), rgba(0,0,0,0) 60%),
+    color-mix(in oklab, var(--brand) 3%, var(--card));
+  animation: orbDriftGlobal 16s ease-in-out infinite;
+  filter:saturate(108%);
+}
+.orb-layer-2{
+  background:
+    radial-gradient(1200px 600px at 85% -10%, rgba(16,255,120,.10), transparent 55%),
+    radial-gradient(900px 420px at 15% 110%, rgba(0,255,200,.08), transparent 60%);
+  animation: orbWavesGlobal 20s ease-in-out infinite;
+  filter: blur(12px);
+}
+@media (prefers-reduced-motion: reduce){ .orb-layer-1,.orb-layer-2{animation:none!important} }
+
+/* ====== EDA / MAP POLISH ====== */
+.hero-choropleth{ box-shadow:0 1px 0 rgba(255,255,255,.04) inset, 0 10px 30px rgba(0,0,0,.25) }
+.choropleth-clean .mapboxgl-ctrl-bottom-right,
+.choropleth-clean .mapboxgl-ctrl-bottom-left{
+  background:rgba(0,0,0,.35); backdrop-filter:blur(6px); border-radius:10px; padding:2px 6px;
+}
+.choropleth-clean .mapboxgl-ctrl-attrib a{ color:#cde7da }
+
+/* unified cards */
+.card-soft{
+  background: linear-gradient(180deg,
+    color-mix(in oklab, var(--card) 95%, #0f1a14 5%),
+    color-mix(in oklab, var(--card) 98%, #0c1310 2%)
+  );
+  border: 1px solid color-mix(in oklab, var(--border-dark) 26%, rgba(255,255,255,.06) 74%);
+  border-radius: 1rem;
+}
+
+/* KPI badge */
+.kpi-badge{ border-radius:999px; padding:2px 10px; background:color-mix(in oklab,#1B8354 22%,#0b1512 78%); color:#c7f2df }
+
+/* tabs */
+[data-state="active"].ui-tab{ outline:2px solid color-mix(in oklab, var(--brand) 65%, #f0fff9 35%); outline-offset:2px }
+
+/* progress */
+.progress-eda .bg-primary{ background:var(--brand)!important }
+.progress-eda .bg-secondary{ background:color-mix(in oklab, var(--brand) 20%, #0b1512 80%) }
+
+/* hero fade */
+.hero-fade-bottom{ position:absolute; left:0; right:0; bottom:0; height:140px; pointer-events:none;
+  background:linear-gradient(to bottom, rgba(0,0,0,0) 0%, var(--background) 92%);
+}
+
+/* ===== Light mode polish ===== */
+html.light, :root:not(.dark) {
+  --background: #F6F8FA;        /* neutral paper */
+  --card: #FFFFFF;
+  --foreground: #0F172A;        /* slate-900 */
+  --subtext-light: #64748B;     /* slate-500 */
+  --border: color-mix(in oklab, var(--foreground) 10%, var(--background));
+  --input:  color-mix(in oklab, var(--foreground) 10%, var(--background));
+  --brand: #1B8354;
+
+  --shadow-sm: 0 1px 2px rgba(16,24,40,.04), 0 1px 3px rgba(16,24,40,.06);
+  --shadow-md: 0 4px 12px rgba(16,24,40,.06);
+  --shadow-lg: 0 8px 24px rgba(16,24,40,.08);
+  --shadow-xl: 0 14px 40px rgba(16,24,40,.10);
+}
+
+html.light body, :root:not(.dark) body {
+  background:
+    radial-gradient(1000px 400px at 80% -10%, rgba(27,131,84,.06), transparent 55%),
+    radial-gradient(800px 360px at 10% 120%, rgba(27,131,84,.04), transparent 60%),
+    var(--background);
+}
+
+/* Cards & tiles in light */
+html.light .card-soft, :root:not(.dark) .card-soft {
+  background: #fff;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+/* hover lift for small tiles */
+html.light .card-hover, :root:not(.dark) .card-hover {
+  transition: box-shadow .18s ease, transform .18s ease;
+}
+html.light .card-hover:hover, :root:not(.dark) .card-hover:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+/* readable chart labels */
+svg text,
+.recharts-text,
+.apexcharts-text,
+.visx-text,
+.dx-chart text,
+.echarts text,
+.d3 text{
+  fill: var(--foreground) !important;
+  color: var(--foreground) !important;
+}
+
+/* meter track helper */
+.meter-track {
+  background: color-mix(in oklab, var(--foreground) 10%, transparent);
+}
+
+/* general card hover for other components */
+.card-hover{ transition: box-shadow .2s ease, transform .2s ease }
+.card-hover:hover{ box-shadow:0 12px 28px rgba(0,0,0,.10); transform: translateY(-2px) }

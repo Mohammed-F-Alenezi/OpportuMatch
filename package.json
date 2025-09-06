@@ -1,0 +1,11 @@
+{
+  "dependencies": {
+    "cmdk": "^1.1.1",
+    "mapbox-gl": "^3.14.0",
+    "papaparse": "^5.5.3",
+    "react-map-gl": "^8.0.4",
+    "react-map-gl-monorepo": "github:visgl/react-map-gl",
+    "read-excel-file": "^5.8.8",
+    "socket.io-client": "^4.8.1"
+  }
+}

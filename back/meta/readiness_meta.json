@@ -1,0 +1,26 @@
+{
+  "threshold": 0.6,
+  "target": "baseline_growth_ready_share",
+  "feature_order": [
+    "f_team_size",
+    "f_has_mvp",
+    "f_market_size",
+    "f_prev_revenue",
+    "f_sector_score"
+  ],
+  "feature_labels": {
+    "f_team_size": "حجم الفريق",
+    "f_has_mvp": "وجود MVP",
+    "f_market_size": "حجم السوق",
+    "f_prev_revenue": "الإيراد السابق",
+    "f_sector_score": "توافق القطاع",
+    "baseline_growth_ready_share": "حصة الجاهزية (هدف)"
+  },
+  "defaults": {
+    "f_team_size": 3,
+    "f_has_mvp": 1,
+    "f_market_size": 50,
+    "f_prev_revenue": 0,
+    "f_sector_score": 0.5
+  }
+}
